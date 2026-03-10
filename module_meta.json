@@ -1,0 +1,17 @@
+{
+  "name": "authentication",
+  "display_name": "Authentication Module",
+  "version": "0.1.0",
+  "author": "Your Name/Organization",
+  "description": "A new ChaCC module providing authentication functionality.",
+  "entry_point": "module.main:setup_plugin",
+  "test_entry_point": "module.tests.test_module:run_module_tests",
+  "base_path_prefix": "/authentication",
+  "dependencies_file": "requirements.txt",
+  "required_chacc_version": ">=1.0.0",
+  "license": "MIT",
+  "tags": [
+    "testing"
+  ],
+  "homepage": "https://github.com/your-org/authentication"
+}
