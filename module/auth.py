@@ -1,30 +1,38 @@
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from .models import User
-from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
-from typing import Optional
-import os
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, HashingError
 from .context_factory import get_module_context
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+ph = PasswordHasher()
 
-# JWT settings
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
 
 security = HTTPBearer()
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return ph.verify(hashed_password, plain_password)
+    except VerifyMismatchError:
+        return False
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
-
+    try:
+        return ph.hash(password)
+    except HashingError:
+        return None
+    
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+        
+    context = get_module_context()
+
+    SECRET_KEY = context.get_module_config("SECRET_KEY", "authentication", "your-secret-key-here")
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -45,17 +53,17 @@ def authenticate_user(db: Session, username: str, password: str):
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user from JWT token."""
     
-    _module_context = get_module_context()
+    context = get_module_context()
     
-    print("Context available. " if _module_context else "No context was detected.")
+    SECRET_KEY = context.get_module_config("SECRET_KEY", "authentication", "your-secret-key-here")
     
-    if _module_context is None:
+    if context is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Module not initialized"
         )
     
-    db = next(_module_context.get_db())
+    db = await anext(context.get_db())
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

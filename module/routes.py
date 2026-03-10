@@ -35,7 +35,7 @@ async def register(user: UserCreate, current_user = Depends(get_current_user)):
 
 @router.post("/login", response_model=Token)
 async def login(user: UserLogin):
-    db = next(get_db())
+    db = await anext(get_db())
     db_user = authenticate_user(db, user.username, user.password)
     if not db_user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")

@@ -1,12 +1,11 @@
-from fastapi import APIRouter
+from .services import create_default_user
 from src.core_services import BackboneContext
 from typing import Optional
 from .auth import get_current_user
 from .routes import router as auth_router
 from .context_factory import get_context, set_module_context
 
-# --- Module Setup ---
-def setup_plugin(context: Optional[BackboneContext] = None):
+async def setup_plugin(context: Optional[BackboneContext] = None):
     """
     This function is called by the ChaCC API backbone to initialize your module.
     It can also be called in development mode without a context.
@@ -16,8 +15,9 @@ def setup_plugin(context: Optional[BackboneContext] = None):
 
     _module_context.logger.info("authentication: Setup initiated!")
 
-    # Register services
     _module_context.register_service("get_current_user", get_current_user)
+    
+    await create_default_user(_module_context)
 
     return auth_router
 
