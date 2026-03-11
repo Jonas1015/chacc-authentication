@@ -1,5 +1,5 @@
 from .services import create_default_user
-from src.core_services import BackboneContext
+from chacc_api import BackboneContext
 from typing import Optional
 from .auth import get_current_user
 from .routes import router as auth_router

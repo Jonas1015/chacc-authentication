@@ -3,8 +3,8 @@ Development context provider for testing modules outside the backbone.
 """
 import logging
 from unittest.mock import Mock
-from src.core_services import BackboneContext
-from src.database import get_db
+from chacc_api import BackboneContext
+from chacc_api import get_db
 from decouple import config as decouple_config
 from typing import Optional
 

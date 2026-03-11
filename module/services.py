@@ -12,7 +12,7 @@ async def create_default_user(context):
     - DEFAULT_ADMIN_USERNAME: Default admin username (default: "admin")
     - DEFAULT_ADMIN_PASSWORD: Default admin password (default: "admin123")
     """
-    _module_context = get_module_context()
+    _module_context = context if context else get_module_context()
     
     default_username = _module_context.get_module_config("DEFAULT_ADMIN_USERNAME", "authentication", "admin")
     default_password = _module_context.get_module_config("DEFAULT_ADMIN_PASSWORD", "authentication", "admin123")
