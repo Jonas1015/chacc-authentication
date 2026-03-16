@@ -1,27 +1,24 @@
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from chacc_api import BackboneContext
 from .models import User, UserCreate, UserLogin, Token, UserResponse
-from .auth import get_current_user, authenticate_user, create_access_token, get_password_hash
+from .models.request_models import TokenRefreshRequest, RevokeRequest
+from .auth import get_current_user, authenticate_user, get_password_hash
 from .context_factory import get_module_context
-from datetime import timedelta
+from .services import login_user, refresh_token, revoke_token, logout_all_sessions
 
 router = APIRouter()
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-
 def get_db():
     """Get database session from module context."""
-    context = get_module_context()
+    context: BackboneContext  = get_module_context()
     if context is None:
         raise HTTPException(status_code=500, detail="Module not initialized")
     return context.get_db()
 
-
 @router.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, current_user = Depends(get_current_user)):
-    db = next(get_db())
+    db = await anext(get_db())
     db_user = db.query(User).filter((User.username == user.username) | (User.email == user.email)).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username or email already registered")
@@ -34,14 +31,14 @@ async def register(user: UserCreate, current_user = Depends(get_current_user)):
 
 
 @router.post("/login", response_model=Token)
-async def login(user: UserLogin):
+async def login(user: UserLogin, request: Request):
     db = await anext(get_db())
     db_user = authenticate_user(db, user.username, user.password)
     if not db_user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(data={"sub": db_user.username}, expires_delta=access_token_expires)
-    return Token(access_token=access_token, token_type="bearer")
+    
+    context = get_module_context()
+    return await login_user(db, db_user, request, context)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -51,7 +48,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 
 @router.put("/me", response_model=UserResponse)
 async def update_user_me(user_update: UserCreate, current_user: User = Depends(get_current_user)):
-    db = next(get_db())
+    db = await anext(get_db())
     current_user.username = user_update.username
     current_user.email = user_update.email
     if user_update.password:
@@ -63,7 +60,7 @@ async def update_user_me(user_update: UserCreate, current_user: User = Depends(g
 
 @router.delete("/me")
 async def delete_user_me(current_user: User = Depends(get_current_user)):
-    db = next(get_db())
+    db = await anext(get_db())
     db.delete(current_user)
     db.commit()
     return {"message": "User deleted"}
@@ -71,8 +68,53 @@ async def delete_user_me(current_user: User = Depends(get_current_user)):
 
 @router.get("/users", response_model=list[UserResponse])
 async def read_users(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_user)):
-    db = next(get_db())
+    db = await anext(get_db())
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not enough permissions")
     users = db.query(User).offset(skip).limit(limit).all()
     return [UserResponse(id=u.id, username=u.username, email=u.email, is_active=u.is_active, role=u.role) for u in users]
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token_endpoint(token_request: TokenRefreshRequest, request: Request):
+    """Refresh access token using a valid refresh token."""
+    db = await anext(get_db())
+    context = get_module_context()
+    
+    token = await refresh_token(db, token_request, request, context)
+    
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
+    
+    return token
+
+
+@router.post("/revoke")
+async def revoke_token_endpoint(revoke_request: RevokeRequest):
+    """Revoke a refresh token (logout from specific device/session)."""
+    db = await anext(get_db())
+    context = get_module_context()
+    
+    success = await revoke_token(db, revoke_request, context)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    return {"message": "Token revoked successfully"}
+
+
+@router.post("/logout")
+async def logout(current_user: User = Depends(get_current_user)):
+    """Logout current user from all devices (revoke all sessions)."""
+    db = await anext(get_db())
+    context = get_module_context()
+    
+    count = await logout_all_sessions(db, current_user.id, context)
+    
+    return {"message": f"Logged out from {count} session(s)"}

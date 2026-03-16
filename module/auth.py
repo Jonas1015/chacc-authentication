@@ -29,10 +29,21 @@ def get_password_hash(password):
         return None
     
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-        
+    
     context = get_module_context()
 
-    SECRET_KEY = context.get_module_config("SECRET_KEY", "authentication", "your-secret-key-here")
+    if context is None:
+        raise RuntimeError("Module not initialized - cannot create access token")
+
+    SECRET_KEY = context.get_module_config("SECRET_KEY", "authentication", None)
+    
+    if not SECRET_KEY:
+        raise ValueError(
+            "SECRET_KEY not configured for authentication module. "
+            "Please set SECRET_KEY in your environment variables."
+        )
+    
+    
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -55,7 +66,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     context = get_module_context()
     
-    SECRET_KEY = context.get_module_config("SECRET_KEY", "authentication", "your-secret-key-here")
+    SECRET_KEY = context.get_module_config("SECRET_KEY", "authentication", None)
+    
+    if not SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="SECRET_KEY not configured"
+        )
     
     if context is None:
         raise HTTPException(

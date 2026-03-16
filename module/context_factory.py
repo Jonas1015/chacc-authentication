@@ -5,7 +5,6 @@ import os
 from typing import Optional
 from chacc_api import BackboneContext
 
-# Module-level context holder (set by main.py after setup_plugin is called)
 _module_context: Optional[BackboneContext] = None
 
 
@@ -26,7 +25,7 @@ class ContextFactory:
     @staticmethod
     def get_context(context: Optional[BackboneContext] = None) -> BackboneContext:
         """
-        Get the appropriate context for the current environment.
+        Get backbone context from ChaCC API.
 
         Args:
             context: Provided context (when running in backbone)
@@ -35,31 +34,15 @@ class ContextFactory:
             BackboneContext instance
         """
         if context is not None:
-            # Running within the backbone
             return context
 
-        # Check environment
-        env = os.getenv("CHACC_ENV", "development")
-
-        if env == "production":
-            # In production, we should have a context, but provide fallback
-            from .dev_context import DevBackboneContext
-            ctx = DevBackboneContext()
-            ctx.logger.warning("No context provided in production environment")
-            return ctx
-        elif env == "testing":
-            # For testing, use minimal context
-            from .dev_context import DevBackboneContext
-            return DevBackboneContext()
-        else:
-            # Development mode
-            from .dev_context import get_dev_context
-            return get_dev_context()
+        raise RuntimeError(
+            "No context provided. This module requires the ChaCC backbone to run."
+        )
 
     @staticmethod
     def is_backbone_available() -> bool:
         """Check if we're running within the ChaCC backbone."""
-        # Check for backbone-specific environment variables or markers
         return os.getenv("CHACC_BACKBONE") == "true"
 
     @staticmethod
@@ -72,7 +55,6 @@ class ContextFactory:
             )
 
 
-# Convenience function
 def get_context(context: Optional[BackboneContext] = None) -> BackboneContext:
     """Get context using the factory."""
     return ContextFactory.get_context(context)
