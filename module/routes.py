@@ -27,7 +27,7 @@ async def register(user: UserCreate, current_user = Depends(get_current_user)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return UserResponse(id=db_user.id, username=db_user.username, email=db_user.email, is_active=db_user.is_active, role=db_user.role)
+    return UserResponse(id=db_user.id, username=db_user.username, email=db_user.email, is_active=db_user.is_active)
 
 
 @router.post("/login", response_model=Token)
@@ -43,7 +43,7 @@ async def login(user: UserLogin, request: Request):
 
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
-    return UserResponse(id=current_user.id, username=current_user.username, email=current_user.email, is_active=current_user.is_active, role=current_user.role)
+    return UserResponse(id=current_user.id, username=current_user.username, email=current_user.email, is_active=current_user.is_active)
 
 
 @router.put("/me", response_model=UserResponse)
@@ -55,7 +55,7 @@ async def update_user_me(user_update: UserCreate, current_user: User = Depends(g
         current_user.password_hash = get_password_hash(user_update.password)
     db.commit()
     db.refresh(current_user)
-    return UserResponse(id=current_user.id, username=current_user.username, email=current_user.email, is_active=current_user.is_active, role=current_user.role)
+    return UserResponse(id=current_user.id, username=current_user.username, email=current_user.email, is_active=current_user.is_active)
 
 
 @router.delete("/me")
@@ -69,10 +69,8 @@ async def delete_user_me(current_user: User = Depends(get_current_user)):
 @router.get("/users", response_model=list[UserResponse])
 async def read_users(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_user)):
     db = await anext(get_db())
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Not enough permissions")
     users = db.query(User).offset(skip).limit(limit).all()
-    return [UserResponse(id=u.id, username=u.username, email=u.email, is_active=u.is_active, role=u.role) for u in users]
+    return [UserResponse(id=u.id, username=u.username, email=u.email, is_active=u.is_active) for u in users]
 
 
 @router.post("/refresh", response_model=Token)

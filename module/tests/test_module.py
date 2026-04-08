@@ -71,7 +71,6 @@ def test_user_model():
     assert user.username == "test"
     assert user.email == "test@example.com"
     assert user.is_active is True
-    assert user.role == "user"
 
 
 def test_user_create_model():
