@@ -33,8 +33,7 @@ async def create_default_user(context):
         username=default_username,
         email=f"{default_username}@chacc.local",
         password_hash=hashed_password,
-        is_active=True,
-        role="admin"
+        is_active=True
     )
     
     db.add(default_user)
