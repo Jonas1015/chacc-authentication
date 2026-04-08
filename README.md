@@ -44,9 +44,8 @@ The module will be available at `http://localhost:8001/auth/`
 
 ### Environment Variables
 
-- `CHACC_ENV`: Set to `development`, `testing`, or `production`
 - `SECRET_KEY`: JWT secret key (use strong key in production)
-- `CHACC_BACKBONE`: Set to `true` when running in ChaCC backbone
+- `AUTHENTICATION_ENABLE_SELF_REGISTRATION`: set to `True` or `False` to allow user to selft-register
 
 ## API Endpoints
 
@@ -80,13 +79,13 @@ module/
 
 The module uses a context factory to work in different environments:
 
+- **Development**: Uses provided BackboneContext
 - **Production**: Uses provided BackboneContext
-- **Development**: Uses DevBackboneContext with mocked services
 - **Testing**: Minimal context for isolated testing
 
 ## Services Provided
 
-- `get_current_user`: Dependency for protecting routes in other modules
+- `get_current_user`: Dependency for protecting routes in other modules which you can get by calling ChaCC `async context.get_service("get_current_user")`
 
 ## Dependencies
 

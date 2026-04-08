@@ -9,6 +9,8 @@ from .services import login_user, refresh_token, revoke_token, logout_all_sessio
 
 router = APIRouter()
 
+registerRouter = APIRouter()
+
 def get_db():
     """Get database session from module context."""
     context: BackboneContext  = get_module_context()
@@ -16,7 +18,7 @@ def get_db():
         raise HTTPException(status_code=500, detail="Module not initialized")
     return context.get_db()
 
-@router.post("/register", response_model=UserResponse)
+@registerRouter.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, current_user = Depends(get_current_user)):
     db = await anext(get_db())
     db_user = db.query(User).filter((User.username == user.username) | (User.email == user.email)).first()
@@ -116,3 +118,5 @@ async def logout(current_user: User = Depends(get_current_user)):
     count = await logout_all_sessions(db, current_user.id, context)
     
     return {"message": f"Logged out from {count} session(s)"}
+
+get_module_context
