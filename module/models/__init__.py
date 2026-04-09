@@ -9,11 +9,23 @@ from .request_models import (
 )
 from .session import OAuthSession
 from .user import User
+from .rbac import (
+    Privilege,
+    Role,
+    RoleGroup,
+    DEFAULT_PRIVILEGES,
+    DEFAULT_ROLES,
+)
 
 
 __all__ = [
     "User", 
     "OAuthSession",
+    "Privilege",
+    "Role",
+    "RoleGroup",
+    "DEFAULT_PRIVILEGES",
+    "DEFAULT_ROLES",
     "UserCreate",
     "UserLogin",
     "Token",

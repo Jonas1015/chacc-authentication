@@ -11,6 +11,11 @@ When enable_audit_fields is True (configured in backbone), additional fields are
 """
 from chacc_api import ChaCCBaseModel, register_model
 from sqlalchemy import Column, String, Boolean
+from sqlalchemy.orm import relationship
+
+
+# Import association tables from rbac module
+from .rbac import user_role_association, user_privilege_association
 
 
 @register_model
@@ -31,3 +36,15 @@ class User(ChaCCBaseModel):
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    
+    # RBAC Relationships - Many-to-many through association tables
+    roles = relationship(
+        "Role",
+        secondary=user_role_association,
+        back_populates="users"
+    )
+    direct_privileges = relationship(
+        "Privilege",
+        secondary=user_privilege_association,
+        back_populates="direct_users"
+    )
