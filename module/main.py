@@ -2,12 +2,8 @@ from .services import create_default_user
 from chacc_api import BackboneContext
 from typing import Optional
 from .auth import get_current_user
-<<<<<<< Updated upstream
 from .routes import router as auth_router, registerRouter
-=======
-from .routes import router as auth_router
 from .routes_rbac import router as rbac_router
->>>>>>> Stashed changes
 from .context_factory import get_context, set_module_context
 from .models import DEFAULT_PRIVILEGES, DEFAULT_ROLES
 from .services.rbac_service import get_rbac_service
@@ -89,18 +85,14 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
     
     await create_default_user(_module_context)
     
-<<<<<<< Updated upstream
     if _module_context.get_module_config("ENABLE_SELF_REGISTRATION", "authentication", default="false").lower() == "true":
         _module_context.logger.info("ChaCC-Authentication: Self-registration is enabled.")
         auth_router.include_router(registerRouter)
 
-    return auth_router
-=======
     await initialize_rbac_defaults(_module_context)
     
     auth_router.include_router(rbac_router)
     return auth_router; 
->>>>>>> Stashed changes
 
 def get_plugin_info():
     """
