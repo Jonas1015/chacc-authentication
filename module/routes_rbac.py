@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from chacc_api import BackboneContext
 from pydantic import BaseModel
 
-from .auth import get_current_user
+from .auth import get_current_user, get_current_user_required
 from .context_factory import get_module_context
 from .models import User, Privilege, Role, RoleGroup
 from .services import get_rbac_service
@@ -92,7 +92,7 @@ async def get_db():
 
 @router.get("/privileges", response_model=List[PrivilegeResponse])
 async def get_privileges(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Get all privileges."""
     db = await get_db()
@@ -106,7 +106,7 @@ async def get_privileges(
 @router.post("/privileges", response_model=PrivilegeResponse)
 async def create_privilege(
     privilege: PrivilegeCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Create a new privilege."""
     db = await get_db()
@@ -141,7 +141,7 @@ async def create_privilege(
 
 @router.get("/roles", response_model=List[RoleResponse])
 async def get_roles(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Get all roles."""
     db = await get_db()
@@ -155,7 +155,7 @@ async def get_roles(
 @router.get("/roles/{role_name}", response_model=RoleWithPrivilegesResponse)
 async def get_role(
     role_name: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Get a specific role with its privileges."""
     db = await get_db()
@@ -172,7 +172,7 @@ async def get_role(
 @router.post("/roles", response_model=RoleResponse)
 async def create_role(
     role: RoleCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Create a new role."""
     db = await get_db()
@@ -206,7 +206,7 @@ async def create_role(
 async def assign_privilege_to_role(
     role_name: str,
     request: AssignPrivilegeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Assign a privilege to a role."""
     db = await get_db()
@@ -231,7 +231,7 @@ async def assign_privilege_to_role(
 async def remove_privilege_from_role(
     role_name: str,
     request: AssignPrivilegeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Remove a privilege from a role."""
     db = await get_db()
@@ -254,10 +254,23 @@ async def remove_privilege_from_role(
 
 # ==================== User Privilege Endpoints ====================
 
+@router.get("/me/privileges", response_model=UserPrivilegesResponse)
+async def get_my_privileges(
+    current_user: User = Depends(get_current_user_required()),
+):
+    """Get effective privileges for the current user."""
+    db = await get_db()
+    redis_client = await get_redis_client()
+    rbac = get_rbac_service(db, redis_client)
+    
+    privileges = await rbac.get_user_privileges(current_user.id)
+    
+    return UserPrivilegesResponse(user_id=current_user.id, privileges=privileges)
+
 @router.get("/users/{user_id}/privileges", response_model=UserPrivilegesResponse)
 async def get_user_privileges(
     user_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Get effective privileges for a user."""
     db = await get_db()
@@ -282,7 +295,7 @@ async def get_user_privileges(
 async def assign_role_to_user(
     user_id: int,
     request: AssignRoleRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Assign a role to a user."""
     db = await get_db()
@@ -307,7 +320,7 @@ async def assign_role_to_user(
 async def remove_role_from_user(
     user_id: int,
     request: AssignRoleRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Remove a role from a user."""
     db = await get_db()
@@ -332,7 +345,7 @@ async def remove_role_from_user(
 async def assign_direct_privilege_to_user(
     user_id: int,
     request: AssignPrivilegeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Assign a direct privilege to a user."""
     db = await get_db()
@@ -357,7 +370,7 @@ async def assign_direct_privilege_to_user(
 async def remove_direct_privilege_from_user(
     user_id: int,
     request: AssignPrivilegeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Remove a direct privilege from a user."""
     db = await get_db()
@@ -382,7 +395,7 @@ async def remove_direct_privilege_from_user(
 
 @router.get("/role-groups", response_model=list)
 async def get_role_groups(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_required()),
 ):
     """Get all role groups."""
     db = await get_db()

@@ -4,6 +4,9 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
+    passwordConfirm: str
+    first_name: str | None = None
+    last_name: str | None = None
 
 
 class UserLogin(BaseModel):
@@ -30,7 +33,10 @@ class RevokeRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: int
+    uuid: str
     username: str
+    first_name: str
+    middle_name: str
+    last_name: str
     email: str
     is_active: bool

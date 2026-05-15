@@ -5,7 +5,7 @@ from .auth import get_current_user
 from .routes import router as auth_router, registerRouter
 from .routes_rbac import router as rbac_router
 from .context_factory import get_context, set_module_context
-from .models import DEFAULT_PRIVILEGES, DEFAULT_ROLES
+from .models import DEFAULT_PRIVILEGES, DEFAULT_ROLES, User
 from .services.rbac_service import get_rbac_service
 from chacc_api import run_automatic_migration
 
@@ -82,15 +82,17 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
     _module_context.logger.info("authentication: Setup initiated!")
 
     _module_context.register_service("get_current_user", get_current_user)
+    _module_context.register_service("UserModel", User)
     
+    await initialize_rbac_defaults(_module_context)
+    
+    # Create default user after migration has run and tables are created
     await create_default_user(_module_context)
     
     if _module_context.get_module_config("ENABLE_SELF_REGISTRATION", "authentication", default="false").lower() == "true":
         _module_context.logger.info("ChaCC-Authentication: Self-registration is enabled.")
         auth_router.include_router(registerRouter)
 
-    await initialize_rbac_defaults(_module_context)
-    
     auth_router.include_router(rbac_router)
     return auth_router; 
 

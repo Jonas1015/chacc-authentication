@@ -61,43 +61,49 @@ def authenticate_user(db: Session, username: str, password: str):
         return False
     return user
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get current user from JWT token."""
+async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    """Get current user from JWT token. Returns None if no valid credentials provided."""
     
     context = get_module_context()
+    
+    if context is None:
+        return None
     
     SECRET_KEY = context.get_module_config("SECRET_KEY", "authentication", None)
     
     if not SECRET_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="SECRET_KEY not configured"
-        )
+        return None
     
-    if context is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Module not initialized"
-        )
+    if not credentials:
+        return None
     
     db = await anext(context.get_db())
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     
     try:
-        if not credentials:
-            raise credentials_exception
-        
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise credentials_exception
+            return None
     except JWTError:
-        raise credentials_exception
+        return None
     user = db.query(User).filter(User.username == username).first()
     if user is None:
-        raise credentials_exception
+        return None
     return user
+
+
+def get_current_user_required():
+    """
+    Returns a dependency that raises 401 if not authenticated.
+    Use this for routes that require authentication.
+    """
+    async def _get_current_user_required(credentials: HTTPAuthorizationCredentials = Depends(security)):
+        user = await get_current_user(credentials)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
+    return _get_current_user_required

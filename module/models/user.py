@@ -33,9 +33,13 @@ class User(ChaCCBaseModel):
     __tablename__ = "users"
     
     username = Column(String, unique=True, index=True, nullable=False)
+    first_name = Column(String, nullable=True)
+    middle_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    
     
     # RBAC Relationships - Many-to-many through association tables
     roles = relationship(
