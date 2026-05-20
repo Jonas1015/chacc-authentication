@@ -46,9 +46,9 @@ async def create_default_user(context):
 
 async def get_token_expiry_settings(context):
     """Get token expiry settings from module config."""
-    access_token_expire_minutes = int(context.get_module_config("ACCESS_TOKEN_EXPIRE_MINUTES", "authentication", 30))
-    refresh_token_expire_days = int(context.get_module_config("REFRESH_TOKEN_EXPIRE_DAYS", "authentication", 7))
-    return access_token_expire_minutes, refresh_token_expire_days
+    access_token_expire_minutes = int(context.get_module_config("ACCESS_TOKEN_EXPIRE_MINUTES", "authentication", 10))
+    refresh_token_expire_minutes = int(context.get_module_config("REFRESH_TOKEN_EXPIRE_MINUTES", "authentication", 15))
+    return access_token_expire_minutes, refresh_token_expire_minutes
 
 
 async def login_user(db: Session, user: User, request: Request, context: BackboneContext) -> Token:
@@ -61,7 +61,7 @@ async def login_user(db: Session, user: User, request: Request, context: Backbon
     if redis_service:
         redis_client = await redis_service.get_client()
     
-    access_token_expire_minutes, refresh_token_expire_days = await get_token_expiry_settings(context)
+    access_token_expire_minutes, refresh_token_expire_minutes = await get_token_expiry_settings(context)
     
     ip_address = request.client.host if request.client else None
     device_info = request.headers.get("user-agent", "Unknown")
@@ -77,16 +77,15 @@ async def login_user(db: Session, user: User, request: Request, context: Backbon
         ip_address=ip_address
     )
     
-    refresh_token_expiry = refresh_token_expire_days * 24 * 60 * 60
+    refresh_token_expiry = refresh_token_expire_minutes * 60
     
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=access_token_expire_minutes * 60,
-        expires_at=expires_at.isoformat(),
+        access_token_expires_at = expires_at.isoformat(),
         access_token_expiry=access_token_expire_minutes * 60,
-        refresh_token_expiry=refresh_token_expiry
+        refresh_token_expiry = refresh_token_expiry
     )
 
 

@@ -7,7 +7,6 @@ from .routes_rbac import router as rbac_router
 from .context_factory import get_context, set_module_context
 from .models import DEFAULT_PRIVILEGES, DEFAULT_ROLES, User
 from .services.rbac_service import get_rbac_service
-from chacc_api import run_automatic_migration
 
 
 async def initialize_rbac_defaults(module_context: BackboneContext):
@@ -18,10 +17,6 @@ async def initialize_rbac_defaults(module_context: BackboneContext):
     are created on first startup if they don't exist.
     """
     try:
-        try:
-            await run_automatic_migration()
-        except Exception as e:
-            module_context.logger.warning(f"Migration attempt failed (tables may not exist yet): {e}")
         
         db_gen = module_context.get_db()
         db = await db_gen.__anext__()

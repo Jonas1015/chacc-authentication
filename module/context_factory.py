@@ -53,8 +53,16 @@ class ContextFactory:
                 "This module requires the ChaCC backbone to be available. "
                 "Use development context for testing: CHACC_ENV=development"
             )
+            
 
 
 def get_context(context: Optional[BackboneContext] = None) -> BackboneContext:
     """Get context using the factory."""
     return ContextFactory.get_context(context)
+
+async def get_db():
+        """Get database session from module context."""
+        context: BackboneContext  = get_module_context()
+        if context is None:
+            raise HTTPException(status_code=500, detail="Module not initialized")
+        return await anext(context.get_db())

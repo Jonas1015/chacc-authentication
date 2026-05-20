@@ -12,9 +12,10 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from chacc_api import BackboneContext
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from .auth import get_current_user, get_current_user_required
-from .context_factory import get_module_context
+from .context_factory import get_db, get_module_context
 from .models import User, Privilege, Role, RoleGroup
 from .services import get_rbac_service
 from .dependencies import get_redis_client
@@ -79,23 +80,15 @@ class AssignRoleRequest(BaseModel):
     role_name: str
 
 
-# Helper to get DB
-async def get_db():
-    """Get database session from module context."""
-    context = get_module_context()
-    if context is None:
-        raise HTTPException(status_code=500, detail="Module not initialized")
-    return await context.get_db().__anext__()
-
 
 # ==================== Privilege Endpoints ====================
 
 @router.get("/privileges", response_model=List[PrivilegeResponse])
 async def get_privileges(
     current_user: User = Depends(get_current_user_required()),
+    db: Session =Depends(get_db)
 ):
     """Get all privileges."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -107,9 +100,9 @@ async def get_privileges(
 async def create_privilege(
     privilege: PrivilegeCreate,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Create a new privilege."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -142,9 +135,9 @@ async def create_privilege(
 @router.get("/roles", response_model=List[RoleResponse])
 async def get_roles(
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Get all roles."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -156,9 +149,9 @@ async def get_roles(
 async def get_role(
     role_name: str,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Get a specific role with its privileges."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -173,9 +166,9 @@ async def get_role(
 async def create_role(
     role: RoleCreate,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Create a new role."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -207,9 +200,9 @@ async def assign_privilege_to_role(
     role_name: str,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Assign a privilege to a role."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -232,9 +225,9 @@ async def remove_privilege_from_role(
     role_name: str,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Remove a privilege from a role."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -257,9 +250,9 @@ async def remove_privilege_from_role(
 @router.get("/me/privileges", response_model=UserPrivilegesResponse)
 async def get_my_privileges(
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Get effective privileges for the current user."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -271,9 +264,9 @@ async def get_my_privileges(
 async def get_user_privileges(
     user_id: int,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Get effective privileges for a user."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -296,9 +289,9 @@ async def assign_role_to_user(
     user_id: int,
     request: AssignRoleRequest,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Assign a role to a user."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -321,9 +314,9 @@ async def remove_role_from_user(
     user_id: int,
     request: AssignRoleRequest,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Remove a role from a user."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -346,9 +339,9 @@ async def assign_direct_privilege_to_user(
     user_id: int,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Assign a direct privilege to a user."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -371,9 +364,9 @@ async def remove_direct_privilege_from_user(
     user_id: int,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Remove a direct privilege from a user."""
-    db = await get_db()
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
     
@@ -396,8 +389,8 @@ async def remove_direct_privilege_from_user(
 @router.get("/role-groups", response_model=list)
 async def get_role_groups(
     current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db)
 ):
     """Get all role groups."""
-    db = await get_db()
     role_groups = db.query(RoleGroup).all()
     return role_groups
