@@ -47,6 +47,13 @@ The module will be available at `http://localhost:8001/auth/`
 - `SECRET_KEY`: JWT secret key (use strong key in production)
 - `AUTHENTICATION_ENABLE_SELF_REGISTRATION`: set to `True` or `False` to allow user to selft-register
 
+# -----------------------------------------------------------------
+# Default Admin User  (used by the official chacc-auth module only)
+# -----------------------------------------------------------------
+- `AUTHENTICATION_DEFAULT_ADMIN_USERNAME`: set username for automatic created account
+- `AUTHENTICATION_DEFAULT_ADMIN_PASSWORD`: set password for automatic created account
+
+
 ## API Endpoints
 
 ### Authentication
