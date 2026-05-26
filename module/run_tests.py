@@ -2,6 +2,7 @@
 """
 Script to run tests and development tools for the authentication module.
 """
+
 import subprocess
 import sys
 import os
@@ -17,8 +18,16 @@ def setup_venv():
         subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
 
     # Activate and install dependencies
-    activate_script = os.path.join(venv_path, "bin", "activate") if os.name != 'nt' else os.path.join(venv_path, "Scripts", "activate.bat")
-    pip_path = os.path.join(venv_path, "bin", "pip") if os.name != 'nt' else os.path.join(venv_path, "Scripts", "pip.exe")
+    activate_script = (
+        os.path.join(venv_path, "bin", "activate")
+        if os.name != "nt"
+        else os.path.join(venv_path, "Scripts", "activate.bat")
+    )
+    pip_path = (
+        os.path.join(venv_path, "bin", "pip")
+        if os.name != "nt"
+        else os.path.join(venv_path, "Scripts", "pip.exe")
+    )
 
     print("Installing dependencies...")
     subprocess.run([pip_path, "install", "-r", "requirements.txt"], check=True)
@@ -35,15 +44,25 @@ def run_tests(venv_path=None):
     # Use venv python if available
     python_exe = sys.executable
     if venv_path:
-        python_exe = os.path.join(venv_path, "bin", "python") if os.name != 'nt' else os.path.join(venv_path, "Scripts", "python.exe")
+        python_exe = (
+            os.path.join(venv_path, "bin", "python")
+            if os.name != "nt"
+            else os.path.join(venv_path, "Scripts", "python.exe")
+        )
 
     try:
         # Run pytest
-        result = subprocess.run([
-            python_exe, "-m", "pytest",
-            os.path.join(tests_dir, "test_module.py"),
-            "-v", "--tb=short"
-        ], cwd=module_dir)
+        result = subprocess.run(
+            [
+                python_exe,
+                "-m",
+                "pytest",
+                os.path.join(tests_dir, "test_module.py"),
+                "-v",
+                "--tb=short",
+            ],
+            cwd=module_dir,
+        )
 
         return result.returncode == 0
 
@@ -56,28 +75,48 @@ def run_standalone(venv_path=None):
     """Run the module in ChaCC server for development."""
     python_exe = sys.executable
     if venv_path:
-        python_exe = os.path.join(venv_path, "bin", "python") if os.name != 'nt' else os.path.join(venv_path, "Scripts", "python.exe")
+        python_exe = (
+            os.path.join(venv_path, "bin", "python")
+            if os.name != "nt"
+            else os.path.join(venv_path, "Scripts", "python.exe")
+        )
 
     try:
         # Run ChaCC server with this module
         module_dir = os.path.dirname(os.path.dirname(__file__))  # plugins/module_name
         plugins_dir = os.path.dirname(module_dir)  # plugins
 
-        subprocess.run([
-            python_exe, "-m", "chacc_cli", "server",
-            "--modules-dir", plugins_dir,
-            "--host", "0.0.0.0",
-            "--port", "8000",
-            "--debug", "--auto-reload"
-        ], cwd=os.path.dirname(__file__))
+        subprocess.run(
+            [
+                python_exe,
+                "-m",
+                "chacc_cli",
+                "server",
+                "--modules-dir",
+                plugins_dir,
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--debug",
+                "--auto-reload",
+            ],
+            cwd=os.path.dirname(__file__),
+        )
     except KeyboardInterrupt:
         print("\nShutting down ChaCC server...")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Authentication Module Development Tools")
-    parser.add_argument("command", choices=["test", "standalone", "setup"], help="Command to run")
-    parser.add_argument("--no-venv", action="store_true", help="Don't use virtual environment")
+    parser = argparse.ArgumentParser(
+        description="Authentication Module Development Tools"
+    )
+    parser.add_argument(
+        "command", choices=["test", "standalone", "setup"], help="Command to run"
+    )
+    parser.add_argument(
+        "--no-venv", action="store_true", help="Don't use virtual environment"
+    )
 
     args = parser.parse_args()
 

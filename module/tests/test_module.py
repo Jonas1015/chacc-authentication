@@ -1,6 +1,7 @@
 """
 Unit tests for authentication module.
 """
+
 import pytest
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
@@ -15,7 +16,12 @@ module_dir = os.path.dirname(os.path.dirname(__file__))
 if module_dir not in sys.path:
     sys.path.insert(0, module_dir)
 
-from module.auth import get_password_hash, verify_password, authenticate_user, create_access_token
+from module.auth import (
+    get_password_hash,
+    verify_password,
+    authenticate_user,
+    create_access_token,
+)
 from module.models import User, UserCreate
 from module.context_factory import set_module_context, get_module_context
 
@@ -23,37 +29,40 @@ from module.context_factory import set_module_context, get_module_context
 # Mock BackboneContext for testing
 class MockBackboneContext:
     """Mock BackboneContext for testing purposes."""
-    
+
     def __init__(self):
         self.logger = Mock()
-        self._module_config = {
-            "SECRET_KEY": "test-secret-key-for-testing-purposes"
-        }
+        self._module_config = {"SECRET_KEY": "test-secret-key-for-testing-purposes"}
         self._db_session = None
-    
+
     def get_module_config(self, key, module, default=None):
         """Get module configuration."""
         if module == "authentication" and key == "SECRET_KEY":
             return self._module_config.get(key, default)
         return default
-    
+
     def get_db(self):
         """Get database session (mocked as async generator)."""
+
         async def mock_db_generator():
             if self._db_session is None:
                 # Create a fresh session for each call
                 from sqlalchemy.orm import sessionmaker
                 from sqlalchemy import create_engine
+
                 engine = create_engine("sqlite:///:memory:")
                 User.__table__.create(engine, checkfirst=True)
-                SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+                SessionLocal = sessionmaker(
+                    autocommit=False, autoflush=False, bind=engine
+                )
                 self._db_session = SessionLocal()
             try:
                 yield self._db_session
             finally:
                 pass  # Don't close the session here as it's reused
+
         return mock_db_generator()
-    
+
     def set_db_session(self, session):
         """Set the database session to be returned by get_db()."""
         self._db_session = session
@@ -97,7 +106,7 @@ def test_create_access_token(mock_context):
     """Test JWT token creation."""
     # Configure the mock context with a secret key
     mock_context._module_config["SECRET_KEY"] = "test-secret-key"
-    
+
     data = {"sub": "testuser"}
     token = create_access_token(data)
     assert isinstance(token, str)
@@ -143,7 +152,7 @@ def test_user_model_with_persistence(db_session):
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
-    
+
     assert user.username == "test"
     assert user.email == "test@example.com"
     assert user.is_active is True  # Now it should be True after persistence
@@ -183,11 +192,21 @@ async def run_module_tests():
     try:
         # Run pytest programmatically
         import subprocess
-        result = subprocess.run([
-            sys.executable, "-m", "pytest",
-            __file__,  # Run this test file
-            "-v", "--tb=short", "--no-header"
-        ], capture_output=True, text=True, cwd=os.path.dirname(__file__))
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                __file__,  # Run this test file
+                "-v",
+                "--tb=short",
+                "--no-header",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(__file__),
+        )
 
         if result.returncode == 0:
             print(f"✓ All authentication tests passed")
@@ -203,12 +222,12 @@ async def run_module_tests():
             return {
                 "status": "failed",
                 "message": f"authentication tests failed",
-                "details": result.stdout + result.stderr
+                "details": result.stdout + result.stderr,
             }
 
     except Exception as e:
         print(f"✗ Error running authentication tests: {e}")
         return {
             "status": "error",
-            "message": f"Error running authentication tests: {e}"
+            "message": f"Error running authentication tests: {e}",
         }

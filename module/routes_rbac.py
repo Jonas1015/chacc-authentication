@@ -7,6 +7,7 @@ This module provides API endpoints for:
 - User role assignment
 - User direct privilege assignment
 """
+
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,7 +21,6 @@ from .models import User, Privilege, Role, RoleGroup
 from .services import get_rbac_service
 from .dependencies import get_redis_client
 
-
 router = APIRouter(prefix="/rbac")
 
 
@@ -30,7 +30,7 @@ class PrivilegeResponse(BaseModel):
     name: str
     description: str
     severity: str
-    
+
     class Config:
         from_attributes = True
 
@@ -40,7 +40,7 @@ class RoleResponse(BaseModel):
     name: str
     description: str
     is_system: bool
-    
+
     class Config:
         from_attributes = True
 
@@ -51,7 +51,7 @@ class RoleWithPrivilegesResponse(BaseModel):
     description: str
     is_system: bool
     privileges: List[PrivilegeResponse]
-    
+
     class Config:
         from_attributes = True
 
@@ -80,18 +80,18 @@ class AssignRoleRequest(BaseModel):
     role_name: str
 
 
-
 # ==================== Privilege Endpoints ====================
+
 
 @router.get("/privileges", response_model=List[PrivilegeResponse])
 async def get_privileges(
     current_user: User = Depends(get_current_user_required()),
-    db: Session =Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get all privileges."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     privileges = await rbac.get_all_privileges()
     return privileges
 
@@ -100,47 +100,47 @@ async def get_privileges(
 async def create_privilege(
     privilege: PrivilegeCreate,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Create a new privilege."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission
     if not await rbac.has_privilege(current_user.id, "WRITE_PRIVILEGES"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required privilege: WRITE_PRIVILEGES"
+            detail="Missing required privilege: WRITE_PRIVILEGES",
         )
-    
+
     # Check if privilege already exists
     existing = await rbac.get_privilege_by_name(privilege.name)
     if existing:
         raise HTTPException(
-            status_code=400,
-            detail=f"Privilege '{privilege.name}' already exists"
+            status_code=400, detail=f"Privilege '{privilege.name}' already exists"
         )
-    
+
     new_privilege = await rbac.create_privilege(
         name=privilege.name,
         description=privilege.description,
-        severity=privilege.severity
+        severity=privilege.severity,
     )
-    
+
     return new_privilege
 
 
 # ==================== Role Endpoints ====================
 
+
 @router.get("/roles", response_model=List[RoleResponse])
 async def get_roles(
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get all roles."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     roles = await rbac.get_all_roles()
     return roles
 
@@ -149,16 +149,16 @@ async def get_roles(
 async def get_role(
     role_name: str,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get a specific role with its privileges."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     role = await rbac.get_role_by_name(role_name)
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
-    
+
     return role
 
 
@@ -166,32 +166,28 @@ async def get_role(
 async def create_role(
     role: RoleCreate,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Create a new role."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission
     if not await rbac.has_privilege(current_user.id, "WRITE_ROLES"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required privilege: WRITE_ROLES"
+            detail="Missing required privilege: WRITE_ROLES",
         )
-    
+
     # Check if role already exists
     existing = await rbac.get_role_by_name(role.name)
     if existing:
         raise HTTPException(
-            status_code=400,
-            detail=f"Role '{role.name}' already exists"
+            status_code=400, detail=f"Role '{role.name}' already exists"
         )
-    
-    new_role = await rbac.create_role(
-        name=role.name,
-        description=role.description
-    )
-    
+
+    new_role = await rbac.create_role(name=role.name, description=role.description)
+
     return new_role
 
 
@@ -200,24 +196,26 @@ async def assign_privilege_to_role(
     role_name: str,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Assign a privilege to a role."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission
     if not await rbac.has_privilege(current_user.id, "WRITE_ROLES"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required privilege: WRITE_ROLES"
+            detail="Missing required privilege: WRITE_ROLES",
         )
-    
+
     success = await rbac.assign_privilege_to_role(role_name, request.privilege_name)
     if not success:
         raise HTTPException(status_code=404, detail="Role or privilege not found")
-    
-    return {"message": f"Privilege '{request.privilege_name}' assigned to role '{role_name}'"}
+
+    return {
+        "message": f"Privilege '{request.privilege_name}' assigned to role '{role_name}'"
+    }
 
 
 @router.delete("/roles/{role_name}/privileges")
@@ -225,62 +223,66 @@ async def remove_privilege_from_role(
     role_name: str,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Remove a privilege from a role."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission
     if not await rbac.has_privilege(current_user.id, "WRITE_ROLES"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required privilege: WRITE_ROLES"
+            detail="Missing required privilege: WRITE_ROLES",
         )
-    
+
     success = await rbac.remove_privilege_from_role(role_name, request.privilege_name)
     if not success:
         raise HTTPException(status_code=404, detail="Role or privilege not found")
-    
-    return {"message": f"Privilege '{request.privilege_name}' removed from role '{role_name}'"}
+
+    return {
+        "message": f"Privilege '{request.privilege_name}' removed from role '{role_name}'"
+    }
 
 
 # ==================== User Privilege Endpoints ====================
 
+
 @router.get("/me/privileges", response_model=UserPrivilegesResponse)
 async def get_my_privileges(
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get effective privileges for the current user."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     privileges = await rbac.get_user_privileges(current_user.id)
-    
+
     return UserPrivilegesResponse(user_id=current_user.id, privileges=privileges)
+
 
 @router.get("/users/{user_id}/privileges", response_model=UserPrivilegesResponse)
 async def get_user_privileges(
     user_id: int,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get effective privileges for a user."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission to view
     if not await rbac.has_privilege(current_user.id, "READ_USER_PRIVILEGES"):
         # Users can only view their own privileges
         if current_user.id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Missing required privilege: READ_USER_PRIVILEGES"
+                detail="Missing required privilege: READ_USER_PRIVILEGES",
             )
-    
+
     privileges = await rbac.get_user_privileges(user_id)
-    
+
     return UserPrivilegesResponse(user_id=user_id, privileges=privileges)
 
 
@@ -289,23 +291,23 @@ async def assign_role_to_user(
     user_id: int,
     request: AssignRoleRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Assign a role to a user."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission
     if not await rbac.has_privilege(current_user.id, "WRITE_USER_ROLES"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required privilege: WRITE_USER_ROLES"
+            detail="Missing required privilege: WRITE_USER_ROLES",
         )
-    
+
     success = await rbac.assign_role_to_user(user_id, request.role_name)
     if not success:
         raise HTTPException(status_code=404, detail="User or role not found")
-    
+
     return {"message": f"Role '{request.role_name}' assigned to user {user_id}"}
 
 
@@ -314,23 +316,23 @@ async def remove_role_from_user(
     user_id: int,
     request: AssignRoleRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Remove a role from a user."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission
     if not await rbac.has_privilege(current_user.id, "WRITE_USER_ROLES"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required privilege: WRITE_USER_ROLES"
+            detail="Missing required privilege: WRITE_USER_ROLES",
         )
-    
+
     success = await rbac.remove_role_from_user(user_id, request.role_name)
     if not success:
         raise HTTPException(status_code=404, detail="User or role not found")
-    
+
     return {"message": f"Role '{request.role_name}' removed from user {user_id}"}
 
 
@@ -339,24 +341,28 @@ async def assign_direct_privilege_to_user(
     user_id: int,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Assign a direct privilege to a user."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission
     if not await rbac.has_privilege(current_user.id, "WRITE_USER_PRIVILEGES"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required privilege: WRITE_USER_PRIVILEGES"
+            detail="Missing required privilege: WRITE_USER_PRIVILEGES",
         )
-    
-    success = await rbac.assign_direct_privilege_to_user(user_id, request.privilege_name)
+
+    success = await rbac.assign_direct_privilege_to_user(
+        user_id, request.privilege_name
+    )
     if not success:
         raise HTTPException(status_code=404, detail="User or privilege not found")
-    
-    return {"message": f"Direct privilege '{request.privilege_name}' assigned to user {user_id}"}
+
+    return {
+        "message": f"Direct privilege '{request.privilege_name}' assigned to user {user_id}"
+    }
 
 
 @router.delete("/users/{user_id}/privileges")
@@ -364,32 +370,37 @@ async def remove_direct_privilege_from_user(
     user_id: int,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Remove a direct privilege from a user."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
-    
+
     # Check if user has permission
     if not await rbac.has_privilege(current_user.id, "WRITE_USER_PRIVILEGES"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required privilege: WRITE_USER_PRIVILEGES"
+            detail="Missing required privilege: WRITE_USER_PRIVILEGES",
         )
-    
-    success = await rbac.remove_direct_privilege_from_user(user_id, request.privilege_name)
+
+    success = await rbac.remove_direct_privilege_from_user(
+        user_id, request.privilege_name
+    )
     if not success:
         raise HTTPException(status_code=404, detail="User or privilege not found")
-    
-    return {"message": f"Direct privilege '{request.privilege_name}' removed from user {user_id}"}
+
+    return {
+        "message": f"Direct privilege '{request.privilege_name}' removed from user {user_id}"
+    }
 
 
 # ==================== Role Group Endpoints ====================
 
+
 @router.get("/role-groups", response_model=list)
 async def get_role_groups(
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get all role groups."""
     role_groups = db.query(RoleGroup).all()

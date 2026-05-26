@@ -6,7 +6,7 @@ from .user_services import (
     login_user,
     refresh_token,
     revoke_token,
-    logout_all_sessions
+    logout_all_sessions,
 )
 
 __all__ = [
@@ -18,5 +18,5 @@ __all__ = [
     "login_user",
     "refresh_token",
     "revoke_token",
-    "logout_all_sessions"
+    "logout_all_sessions",
 ]

@@ -5,7 +5,7 @@ from .request_models import (
     Token,
     UserResponse,
     TokenRefreshRequest,
-    RevokeRequest
+    RevokeRequest,
 )
 from .session import OAuthSession
 from .user import User
@@ -17,9 +17,8 @@ from .rbac import (
     DEFAULT_ROLES,
 )
 
-
 __all__ = [
-    "User", 
+    "User",
     "OAuthSession",
     "Privilege",
     "Role",
@@ -31,5 +30,5 @@ __all__ = [
     "Token",
     "UserResponse",
     "TokenRefreshRequest",
-    "RevokeRequest"
+    "RevokeRequest",
 ]
