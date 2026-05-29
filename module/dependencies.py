@@ -15,25 +15,9 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .auth import get_current_user
-from .context_factory import get_db, get_module_context
+from .context_factory import get_db, get_module_context, get_redis_client
 from .models import User
 from .services import get_rbac_service
-
-
-async def get_redis_client():
-    """Get Redis client from module context."""
-    context = get_module_context()
-    if context is None:
-        return None
-
-    redis_service = context.get_service("redis")
-    if redis_service is None:
-        return None
-
-    try:
-        return await redis_service.get_client()
-    except Exception:
-        return None
 
 
 def require_privilege(privilege_name: str):
