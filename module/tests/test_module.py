@@ -3,30 +3,26 @@ Unit tests for authentication module.
 """
 
 import pytest
-from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from unittest.mock import Mock, MagicMock
-import asyncio
+from unittest.mock import Mock
 import sys
 import os
 
-# Add the module directory to Python path for imports
 module_dir = os.path.dirname(os.path.dirname(__file__))
 if module_dir not in sys.path:
     sys.path.insert(0, module_dir)
 
-from module.auth import (
+from ..auth import (
     get_password_hash,
     verify_password,
     authenticate_user,
     create_access_token,
 )
-from module.models import User, UserCreate
-from module.context_factory import set_module_context, get_module_context
+from ..models import User, UserCreate
+from ..context_factory import set_module_context
 
 
-# Mock BackboneContext for testing
 class MockBackboneContext:
     """Mock BackboneContext for testing purposes."""
 
@@ -46,7 +42,6 @@ class MockBackboneContext:
 
         async def mock_db_generator():
             if self._db_session is None:
-                # Create a fresh session for each call
                 from sqlalchemy.orm import sessionmaker
                 from sqlalchemy import create_engine
 
@@ -59,7 +54,7 @@ class MockBackboneContext:
             try:
                 yield self._db_session
             finally:
-                pass  # Don't close the session here as it's reused
+                pass
 
         return mock_db_generator()
 
@@ -74,16 +69,13 @@ def mock_context():
     context = MockBackboneContext()
     set_module_context(context)
     yield context
-    # Clean up
     set_module_context(None)
 
 
 @pytest.fixture
 def db_session():
     """Database session fixture for testing."""
-    # Create in-memory SQLite database for testing
     engine = create_engine("sqlite:///:memory:")
-    # Create tables for our models
     User.__table__.create(engine, checkfirst=True)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = SessionLocal()
@@ -104,7 +96,6 @@ def test_password_hashing():
 
 def test_create_access_token(mock_context):
     """Test JWT token creation."""
-    # Configure the mock context with a secret key
     mock_context._module_config["SECRET_KEY"] = "test-secret-key"
 
     data = {"sub": "testuser"}
@@ -115,19 +106,16 @@ def test_create_access_token(mock_context):
 
 def test_authenticate_user(db_session):
     """Test user authentication."""
-    # Create a test user
     password = "testpass"
     hashed = get_password_hash(password)
     user = User(username="testuser", email="test@example.com", password_hash=hashed)
     db_session.add(user)
     db_session.commit()
 
-    # Test successful authentication
     auth_user = authenticate_user(db_session, "testuser", password)
     assert auth_user is not False
     assert auth_user.username == "testuser"
 
-    # Test failed authentication
     auth_user = authenticate_user(db_session, "testuser", "wrongpass")
     assert auth_user is False
 
@@ -141,8 +129,6 @@ def test_user_model():
     user = User(username="test", email="test@example.com", password_hash="hash")
     assert user.username == "test"
     assert user.email == "test@example.com"
-    # When created directly, is_active will be None until persisted
-    # Test that the column default is True by checking the column definition
     assert User.is_active.default.arg is True
 
 
@@ -155,7 +141,7 @@ def test_user_model_with_persistence(db_session):
 
     assert user.username == "test"
     assert user.email == "test@example.com"
-    assert user.is_active is True  # Now it should be True after persistence
+    assert user.is_active is True
 
 
 def test_user_create_model():
@@ -168,7 +154,7 @@ def test_user_create_model():
 
 def test_authentication_module_info():
     """Test module information retrieval."""
-    from ..main import get_plugin_info
+    from main import get_plugin_info
 
     info = get_plugin_info()
     assert info["name"] == "authentication"
@@ -184,13 +170,11 @@ async def run_module_tests():
     import sys
     import os
 
-    # Add the module directory to Python path for testing
     module_dir = os.path.dirname(os.path.dirname(__file__))
     if module_dir not in sys.path:
         sys.path.insert(0, module_dir)
 
     try:
-        # Run pytest programmatically
         import subprocess
 
         result = subprocess.run(
@@ -198,7 +182,7 @@ async def run_module_tests():
                 sys.executable,
                 "-m",
                 "pytest",
-                __file__,  # Run this test file
+                __file__,
                 "-v",
                 "--tb=short",
                 "--no-header",
