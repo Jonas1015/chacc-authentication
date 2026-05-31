@@ -101,7 +101,7 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
         == "true"
     ):
         _module_context.logger.info(
-            "ChaCC-Authentication: Self-registration is enabled."
+            "authentication: Self-registration is enabled."
         )
         auth_router.include_router(registerRouter)
 
