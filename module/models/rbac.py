@@ -226,6 +226,16 @@ DEFAULT_PRIVILEGES = [
         "description": "Create/modify password policy",
         "severity": "HIGH",
     },
+    {
+        "name": "MANAGE_MENU",
+        "description": "Create/update/delete menu content and manage staff access for assigned restaurants",
+        "severity": "HIGH",
+    },
+    {
+        "name": "VIEW_ANALYTICS",
+        "description": "View restaurant analytics dashboards",
+        "severity": "MEDIUM",
+    },
 ]
 
 
@@ -245,5 +255,15 @@ DEFAULT_ROLES = [
         "name": "POWER_USER",
         "description": "Power user with extended privileges",
         "privilege_names": ["READ_OWN_PROFILE", "WRITE_OWN_PROFILE", "READ_USERS"],
+    },
+    {
+        "name": "MENU_MANAGER",
+        "description": "Menu Manager: manages menu content and staff access for their assigned restaurant(s)",
+        "privilege_names": ["MANAGE_MENU"],
+    },
+    {
+        "name": "ANALYTICS_VIEWER",
+        "description": "Analytics Viewer: read-only access to restaurant analytics dashboards",
+        "privilege_names": ["VIEW_ANALYTICS"],
     },
 ]

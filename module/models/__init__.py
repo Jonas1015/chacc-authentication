@@ -16,6 +16,7 @@ from .rbac import (
     DEFAULT_PRIVILEGES,
     DEFAULT_ROLES,
 )
+from .tenant_access import RestaurantAccess, Invite, generate_invite_token
 
 __all__ = [
     "User",
@@ -25,6 +26,9 @@ __all__ = [
     "RoleGroup",
     "DEFAULT_PRIVILEGES",
     "DEFAULT_ROLES",
+    "RestaurantAccess",
+    "Invite",
+    "generate_invite_token",
     "UserCreate",
     "UserLogin",
     "Token",

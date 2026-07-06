@@ -4,9 +4,11 @@ from typing import Optional
 from .auth import get_current_user
 from .routes import router as auth_router, registerRouter
 from .routes_rbac import router as rbac_router
+from .routes_invites import router as invites_router
 from .context_factory import get_context, set_module_context
 from .models import DEFAULT_PRIVILEGES, DEFAULT_ROLES, User
 from .services.rbac_service import get_rbac_service
+from .services.tenant_access_bridge import can_access_restaurant
 
 
 async def initialize_rbac_defaults(module_context: BackboneContext):
@@ -88,6 +90,7 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
 
     _module_context.register_service("get_current_user", get_current_user)
     _module_context.register_service("UserModel", User)
+    _module_context.register_service("can_access_restaurant", can_access_restaurant)
 
     await initialize_rbac_defaults(_module_context)
 
@@ -106,6 +109,7 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
         auth_router.include_router(registerRouter)
 
     auth_router.include_router(rbac_router)
+    auth_router.include_router(invites_router)
     return auth_router
 
 
