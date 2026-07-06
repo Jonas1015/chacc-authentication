@@ -9,6 +9,10 @@ from .context_factory import get_context, set_module_context
 from .models import DEFAULT_PRIVILEGES, DEFAULT_ROLES, User
 from .services.rbac_service import get_rbac_service
 from .services.tenant_access_bridge import can_access_restaurant
+from .services.tenant_access_service import (
+    get_accessible_restaurant_uuids,
+    grant_restaurant_access,
+)
 
 
 async def initialize_rbac_defaults(module_context: BackboneContext):
@@ -91,6 +95,12 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
     _module_context.register_service("get_current_user", get_current_user)
     _module_context.register_service("UserModel", User)
     _module_context.register_service("can_access_restaurant", can_access_restaurant)
+    _module_context.register_service(
+        "get_accessible_restaurant_uuids", get_accessible_restaurant_uuids
+    )
+    _module_context.register_service(
+        "grant_restaurant_access", grant_restaurant_access
+    )
 
     await initialize_rbac_defaults(_module_context)
 

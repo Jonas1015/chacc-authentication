@@ -10,8 +10,11 @@ from .user_services import (
 from .tenant_access_service import (
     get_restaurant_access,
     user_can_manage_restaurant_staff,
+    get_accessible_restaurant_uuids,
+    grant_restaurant_access,
 )
 from .tenant_access_bridge import can_access_restaurant
+from .email_service import send_invite_email
 
 __all__ = [
     "OAuth2Service",
@@ -25,5 +28,8 @@ __all__ = [
     "logout_all_sessions",
     "get_restaurant_access",
     "user_can_manage_restaurant_staff",
+    "get_accessible_restaurant_uuids",
+    "grant_restaurant_access",
     "can_access_restaurant",
+    "send_invite_email",
 ]

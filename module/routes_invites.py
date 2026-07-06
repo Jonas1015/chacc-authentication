@@ -2,6 +2,7 @@
 Staff invite & tenant access routes (Epic C7 / REQ-1.11, REQ-1.12).
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,7 +13,11 @@ from .auth import get_current_user_required, get_password_hash
 from .context_factory import get_db, get_module_context, get_redis_client
 from .models import User, UserResponse
 from .models.tenant_access import Invite, RestaurantAccess, generate_invite_token
-from .services import get_rbac_service, user_can_manage_restaurant_staff
+from .services import (
+    get_rbac_service,
+    send_invite_email,
+    user_can_manage_restaurant_staff,
+)
 
 router = APIRouter()
 
@@ -49,6 +54,13 @@ class RevokeAccessResponse(BaseModel):
 
 async def _invite_expire_days(context) -> int:
     return int(context.get_module_config("INVITE_EXPIRE_DAYS", "authentication", 7))
+
+
+def _invite_accept_url(context, token: str) -> str:
+    base_url = context.get_module_config(
+        "PUBLIC_BASE_URL", "authentication", "http://localhost:8085"
+    )
+    return f"{base_url.rstrip('/')}/authentication/invites/{token}/accept"
 
 
 # ==================== Routes ====================
@@ -102,13 +114,21 @@ async def create_invite(
     db.commit()
     db.refresh(db_invite)
 
+    invite_link = _invite_accept_url(context, token)
+    # Best-effort delivery: SMTP I/O runs off the event loop, and a failed
+    # send never blocks invite creation - the Invite row + token are the
+    # source of truth (see services/email_service.py).
+    await asyncio.to_thread(
+        send_invite_email, context, invite.email, invite_link, role.name
+    )
+
     return InviteResponse(
         token=token,
         email=invite.email,
         restaurant_uuid=invite.restaurant_uuid,
         role_name=role.name,
         expires_at=expires_at.isoformat(),
-        invite_link=f"/authentication/invites/{token}/accept",
+        invite_link=invite_link,
     )
 
 

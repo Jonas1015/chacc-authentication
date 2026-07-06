@@ -19,21 +19,9 @@ from chacc_api import engine
 from sqlalchemy.orm import sessionmaker
 
 from ..models.tenant_access import RestaurantAccess
-from ..models.user import User
+from .tenant_access_service import GLOBAL_ADMIN_PRIVILEGES, user_privilege_names
 
 _SyncSessionLocal = sessionmaker(bind=engine)
-
-_GLOBAL_ADMIN_PRIVILEGES = {"ALL", "MANAGE_SYSTEM"}
-
-
-def _sync_user_privilege_names(db, user_id: int) -> set:
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return set()
-    names = {p.name for p in user.direct_privileges}
-    for role in user.roles:
-        names.update(p.name for p in role.privileges)
-    return names
 
 
 def can_access_restaurant(user: Any, restaurant: Any) -> bool:
@@ -45,8 +33,8 @@ def can_access_restaurant(user: Any, restaurant: Any) -> bool:
 
     db = _SyncSessionLocal()
     try:
-        privilege_names = _sync_user_privilege_names(db, user_id)
-        if privilege_names & _GLOBAL_ADMIN_PRIVILEGES:
+        privilege_names = user_privilege_names(db, user_id)
+        if privilege_names & GLOBAL_ADMIN_PRIVILEGES:
             return True
 
         access = (
