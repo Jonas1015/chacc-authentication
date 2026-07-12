@@ -8,18 +8,18 @@ This module provides API endpoints for:
 - User direct privilege assignment
 """
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from chacc_api import BackboneContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .auth import get_current_user, get_current_user_required
-from .context_factory import get_db, get_module_context
-from .models import User, Privilege, Role, RoleGroup
-from .services import get_rbac_service
-from .dependencies import get_redis_client
+from chacc_authentication.module.auth import get_current_user, get_current_user_required
+from chacc_authentication.module.context_factory import get_db, get_module_context
+from chacc_authentication.module.models import User, Privilege, Role, RoleGroup
+from chacc_authentication.module.services import get_rbac_service
+from chacc_authentication.module.dependencies import get_redis_client
 
 router = APIRouter(prefix="/rbac")
 
@@ -65,6 +65,11 @@ class PrivilegeCreate(BaseModel):
     name: str
     description: str
     severity: str  # CRITICAL, VERY HIGH, HIGH, MEDIUM, LOW
+
+
+class PrivilegeUpdate(BaseModel):
+    description: Optional[str] = None
+    severity: Optional[str] = None  # CRITICAL, VERY HIGH, HIGH, MEDIUM, LOW
 
 
 class RoleCreate(BaseModel):
@@ -129,15 +134,64 @@ async def create_privilege(
     return new_privilege
 
 
+@router.put("/privileges/{privilege_name}", response_model=PrivilegeResponse)
+async def update_privilege(
+    privilege_name: str,
+    privilege: PrivilegeUpdate,
+    current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db),
+):
+    """Update a privilege's description and/or severity."""
+    redis_client = await get_redis_client()
+    rbac = get_rbac_service(db, redis_client)
+
+    if not await rbac.has_privilege(current_user.id, "WRITE_PRIVILEGES"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required privilege: WRITE_PRIVILEGES",
+        )
+
+    updated = await rbac.update_privilege(
+        name=privilege_name,
+        description=privilege.description,
+        severity=privilege.severity,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Privilege not found")
+    return updated
+
+
+@router.delete("/privileges/{privilege_name}")
+async def delete_privilege(
+    privilege_name: str,
+    current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db),
+):
+    """Delete a privilege by name."""
+    redis_client = await get_redis_client()
+    rbac = get_rbac_service(db, redis_client)
+
+    if not await rbac.has_privilege(current_user.id, "WRITE_PRIVILEGES"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required privilege: WRITE_PRIVILEGES",
+        )
+
+    deleted = await rbac.delete_privilege(privilege_name)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Privilege not found")
+    return {"success": True, "message": f"Privilege '{privilege_name}' deleted"}
+
+
 # ==================== Role Endpoints ====================
 
 
-@router.get("/roles", response_model=List[RoleResponse])
+@router.get("/roles", response_model=List[RoleWithPrivilegesResponse])
 async def get_roles(
     current_user: User = Depends(get_current_user_required()),
     db: Session = Depends(get_db),
 ):
-    """Get all roles."""
+    """Get all roles, each with its assigned privileges."""
     redis_client = await get_redis_client()
     rbac = get_rbac_service(db, redis_client)
 

@@ -3,16 +3,16 @@ from sqlalchemy.orm import Session
 from chacc_api import BackboneContext
 from typing import Optional
 
-from .models import User, UserCreate, UserLogin, Token, UserResponse
-from .models.request_models import TokenRefreshRequest, RevokeRequest
-from .auth import (
+from chacc_authentication.module.models import User, UserCreate, UserLogin, Token, UserResponse
+from chacc_authentication.module.models.request_models import TokenRefreshRequest, RevokeRequest
+from chacc_authentication.module.auth import (
     get_current_user,
     get_current_user_required,
     authenticate_user,
     get_password_hash,
 )
-from .context_factory import get_module_context, get_db
-from .services import login_user, refresh_token, revoke_token, logout_all_sessions
+from chacc_authentication.module.context_factory import get_module_context, get_db
+from chacc_authentication.module.services import login_user, refresh_token, revoke_token, logout_all_sessions
 
 router = APIRouter()
 
@@ -50,7 +50,7 @@ async def register(
     db.commit()
     db.refresh(db_user)
     return UserResponse(
-        uuid=db_user.uuid,
+        uuid=str(db_user.uuid),
         username=db_user.username,
         first_name=db_user.first_name,
         middle_name=db_user.middle_name,
@@ -126,7 +126,15 @@ async def read_users(
 ):
     users = db.query(User).offset(skip).limit(limit).all()
     return [
-        UserResponse(id=u.id, username=u.username, email=u.email, is_active=u.is_active)
+        UserResponse(
+            uuid=str(u.uuid),
+            username=u.username,
+            first_name=u.first_name,
+            middle_name=u.middle_name,
+            last_name=u.last_name,
+            email=u.email,
+            is_active=u.is_active,
+        )
         for u in users
     ]
 

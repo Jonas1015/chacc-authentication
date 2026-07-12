@@ -13,9 +13,11 @@ When enable_audit_fields is True (configured in backbone), additional fields are
 from chacc_api import ChaCCBaseModel, register_model
 from sqlalchemy import Column, String, Boolean
 from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Boolean
+from sqlalchemy.orm import relationship
 
 # Import association tables from rbac module
-from .rbac import user_role_association, user_privilege_association
+from chacc_authentication.module.models.rbac import user_role_association, user_privilege_association
 
 
 @register_model
@@ -48,3 +50,5 @@ class User(ChaCCBaseModel):
     direct_privileges = relationship(
         "Privilege", secondary=user_privilege_association, back_populates="direct_users"
     )
+    oauth_sessions = relationship("OAuthSession", back_populates="user")
+

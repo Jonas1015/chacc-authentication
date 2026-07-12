@@ -15,16 +15,16 @@ The service follows the Hybrid DB/Redis pattern:
 """
 
 import json
+import logging
 from typing import Optional, List
 
 from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import Session
-from src.logger import configure_logging
 
-from ..models.rbac import Privilege, Role, RoleGroup, DEFAULT_PRIVILEGES, DEFAULT_ROLES
-from ..models.user import User
+from chacc_authentication.module.models.rbac import Privilege, Role, RoleGroup, DEFAULT_PRIVILEGES, DEFAULT_ROLES
+from chacc_authentication.module.models.user import User
 
-logger = configure_logging()
+logger = logging.getLogger(__name__)
 
 # Cache TTL for user privileges (1 hour)
 PRIVILEGE_CACHE_TTL = 3600
@@ -66,6 +66,37 @@ class RBACService:
         self.db.refresh(privilege)
         logger.info(f"Created privilege: {name}")
         return privilege
+
+    async def update_privilege(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        severity: Optional[str] = None,
+    ) -> Optional[Privilege]:
+        """Update an existing privilege's description and/or severity."""
+        privilege = await self.get_privilege_by_name(name)
+        if privilege is None:
+            return None
+        if description is not None:
+            privilege.description = description
+        if severity is not None:
+            privilege.severity = severity
+        self.db.commit()
+        self.db.refresh(privilege)
+        logger.info(f"Updated privilege: {name}")
+        return privilege
+
+    async def delete_privilege(self, name: str) -> bool:
+        """Delete a privilege by name. Returns False if it does not exist."""
+        privilege = await self.get_privilege_by_name(name)
+        if privilege is None:
+            return False
+        self.db.delete(privilege)
+        self.db.commit()
+        # Effective privileges may have changed for many users.
+        await self._invalidate_all_user_cache()
+        logger.info(f"Deleted privilege: {name}")
+        return True
 
     # ==================== Role Operations ====================
 

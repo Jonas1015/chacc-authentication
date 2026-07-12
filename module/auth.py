@@ -3,18 +3,19 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from .models import User
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, HashingError
-from .context_factory import get_module_context
+
+from chacc_authentication.module.models.user import User
+from chacc_authentication.module.context_factory import get_module_context
 
 ph = PasswordHasher()
 
 ALGORITHM = "HS256"
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def verify_password(plain_password, hashed_password):

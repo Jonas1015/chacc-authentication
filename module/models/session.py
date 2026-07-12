@@ -13,12 +13,12 @@ When enable_audit_fields is True, additional fields are added:
 - created_by_id, updated_by_id, deleted_by_id (Foreign keys to users)
 """
 
-from chacc_api import ChaCCBaseModel, register_model
+from chacc_api import ChaCCBaseModel
 from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
+from chacc_authentication.module.models.user import User
 
 
-@register_model
 class OAuthSession(ChaCCBaseModel):
     """
     OAuth2 Session model for refresh token management.
@@ -43,4 +43,5 @@ class OAuthSession(ChaCCBaseModel):
     device_info = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
 
-    user = relationship("User", backref="oauth_sessions")
+    user = relationship(User, back_populates="oauth_sessions")
+

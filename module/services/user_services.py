@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from chacc_api import BackboneContext, RedisService
 
-from ..auth import get_password_hash
-from ..models import User, Token, TokenRefreshRequest, RevokeRequest
-from .oauth2_service import OAuth2Service
-from ..context_factory import get_module_context
+from chacc_authentication.module.auth import get_password_hash
+from chacc_authentication.module.models import User, Token, TokenRefreshRequest, RevokeRequest
+from chacc_authentication.module.services.oauth2_service import OAuth2Service
+from chacc_authentication.module.context_factory import get_module_context
 from datetime import timedelta, datetime, timezone
 
 
@@ -51,6 +51,33 @@ async def create_default_user(context):
     _module_context.logger.warning(
         "DEFAULT CREDENTIALS - Please change the default password in production!"
     )
+
+
+async def ensure_default_admin_privileges(context):
+    """Guarantee the default admin holds the ALL super-privilege.
+
+    Runs on every startup (idempotent) so the RBAC system is always
+    bootstrappable — without a super-admin, nobody could grant privileges or
+    roles, locking the whole access-management surface.
+    """
+    from chacc_authentication.module.services.rbac_service import get_rbac_service
+
+    _module_context = context if context else get_module_context()
+    default_username = _module_context.get_module_config(
+        "DEFAULT_ADMIN_USERNAME", "authentication", "admin"
+    )
+
+    db: Session = await anext(_module_context.get_db())
+    admin = db.query(User).filter(User.username == default_username).first()
+    if not admin:
+        return
+
+    rbac = get_rbac_service(db)
+    if not await rbac.has_privilege(admin.id, "ALL"):
+        await rbac.assign_direct_privilege_to_user(admin.id, "ALL")
+        _module_context.logger.info(
+            f"Granted ALL privilege to default admin '{default_username}'"
+        )
 
 
 async def get_token_expiry_settings(context):

@@ -13,14 +13,14 @@ module_dir = os.path.dirname(os.path.dirname(__file__))
 if module_dir not in sys.path:
     sys.path.insert(0, module_dir)
 
-from ..auth import (
+from chacc_authentication.module.auth import (
     get_password_hash,
     verify_password,
     authenticate_user,
     create_access_token,
 )
-from ..models import User, UserCreate
-from ..context_factory import set_module_context
+from chacc_authentication.module.models import User, UserCreate
+from chacc_authentication.module.context_factory import set_module_context
 
 
 class MockBackboneContext:
@@ -154,7 +154,7 @@ def test_user_create_model():
 
 def test_authentication_module_info():
     """Test module information retrieval."""
-    from main import get_plugin_info
+    from chacc_authentication.module.main import get_plugin_info
 
     info = get_plugin_info()
     assert info["name"] == "authentication"
