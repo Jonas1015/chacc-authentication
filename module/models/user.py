@@ -50,5 +50,7 @@ class User(ChaCCBaseModel):
     direct_privileges = relationship(
         "Privilege", secondary=user_privilege_association, back_populates="direct_users"
     )
-    oauth_sessions = relationship("OAuthSession", back_populates="user")
+    oauth_sessions = relationship(
+        "OAuthSession", back_populates="user", cascade="all, delete-orphan"
+    )
 

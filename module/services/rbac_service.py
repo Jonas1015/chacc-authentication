@@ -263,6 +263,13 @@ class RBACService:
             return []
         return [role.name for role in user.roles]
 
+    async def get_user_direct_privileges(self, user_id: int) -> List[str]:
+        """Get the names of privileges assigned directly to a user (not via roles)."""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return []
+        return [privilege.name for privilege in user.direct_privileges]
+
     async def _calculate_effective_privileges_from_db(
         self, user_id: int
     ) -> List[Privilege]:

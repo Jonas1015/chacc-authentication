@@ -498,6 +498,30 @@ async def get_user_roles(
     return UserRolesResponse(user_uuid=user_uuid, roles=roles)
 
 
+@router.get(
+    "/users/{user_uuid}/direct-privileges", response_model=UserPrivilegesResponse
+)
+async def get_user_direct_privileges(
+    user_uuid: str,
+    current_user: User = Depends(get_current_user_required()),
+    db: Session = Depends(get_db),
+):
+    """Get privileges assigned directly to a user (excluding role-inherited)."""
+    redis_client = await get_redis_client()
+    rbac = get_rbac_service(db, redis_client)
+
+    target = _resolve_user(user_uuid, db)
+    if not await rbac.has_privilege(current_user.id, "READ_USER_PRIVILEGES"):
+        if current_user.id != target.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Missing required privilege: READ_USER_PRIVILEGES",
+            )
+
+    privileges = await rbac.get_user_direct_privileges(target.id)
+    return UserPrivilegesResponse(user_uuid=user_uuid, privileges=privileges)
+
+
 @router.put("/users/{user_uuid}/roles")
 async def assign_role_to_user(
     user_uuid: str,

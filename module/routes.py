@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from chacc_api import BackboneContext
 from typing import Optional
 
-from chacc_authentication.module.models import User, UserCreate, UserLogin, Token, UserResponse
+from chacc_authentication.module.models import User, UserCreate, UserLogin, Token, UserResponse, OAuthSession
 from chacc_authentication.module.models.request_models import TokenRefreshRequest, RevokeRequest
 from chacc_authentication.module.auth import (
     get_current_user,
@@ -155,6 +155,9 @@ async def delete_user_me(
     current_user: User = Depends(get_current_user_required()),
     db: Session = Depends(get_db),
 ):
+    db.query(OAuthSession).filter(OAuthSession.user_id == current_user.id).delete(
+        synchronize_session=False
+    )
     db.delete(current_user)
     db.commit()
     return {"message": "User deleted"}
@@ -262,6 +265,10 @@ async def admin_delete_user(
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
 
+    # Remove dependent login sessions first (FK is NOT NULL, no DB cascade).
+    db.query(OAuthSession).filter(OAuthSession.user_id == user.id).delete(
+        synchronize_session=False
+    )
     db.delete(user)
     db.commit()
     return {"success": True, "message": "User deleted"}
