@@ -119,6 +119,62 @@ class RBACService:
         logger.info(f"Created role: {name}")
         return role
 
+    async def update_role(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        new_name: Optional[str] = None,
+        privilege_names: Optional[List[str]] = None,
+    ) -> Optional[Role]:
+        """Update a role's name, description and/or assigned privileges.
+
+        Unlike privileges, role names are safe to change (users link to roles by
+        id), but system roles are re-seeded by name on startup, so renaming them
+        is disallowed to avoid duplicates.
+        """
+        role = await self.get_role_by_name(name)
+        if role is None:
+            return None
+
+        if new_name is not None and new_name != role.name:
+            if getattr(role, "is_system", False):
+                raise ValueError("System roles cannot be renamed")
+            existing = await self.get_role_by_name(new_name)
+            if existing and existing.id != role.id:
+                raise ValueError(f"Role '{new_name}' already exists")
+            role.name = new_name
+
+        if description is not None:
+            role.description = description
+
+        if privilege_names is not None:
+            resolved = []
+            for priv_name in privilege_names:
+                privilege = await self.get_privilege_by_name(priv_name)
+                if privilege is None:
+                    raise ValueError(f"Privilege '{priv_name}' does not exist")
+                resolved.append(privilege)
+            role.privileges = resolved
+
+        self.db.commit()
+        self.db.refresh(role)
+        await self._invalidate_all_user_cache()
+        logger.info(f"Updated role: {name}")
+        return role
+
+    async def delete_role(self, name: str) -> bool:
+        """Delete a non-system role by name. Returns False if it does not exist."""
+        role = await self.get_role_by_name(name)
+        if role is None:
+            return False
+        if getattr(role, "is_system", False):
+            raise ValueError("System roles cannot be deleted")
+        self.db.delete(role)
+        self.db.commit()
+        await self._invalidate_all_user_cache()
+        logger.info(f"Deleted role: {name}")
+        return True
+
     async def assign_privilege_to_role(
         self, role_name: str, privilege_name: str
     ) -> bool:
@@ -199,6 +255,13 @@ class RBACService:
                 logger.warning(f"Failed to cache privileges for user {user_id}: {e}")
 
         return priv_names
+
+    async def get_user_roles(self, user_id: int) -> List[str]:
+        """Get the names of roles directly assigned to a user."""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return []
+        return [role.name for role in user.roles]
 
     async def _calculate_effective_privileges_from_db(
         self, user_id: int
