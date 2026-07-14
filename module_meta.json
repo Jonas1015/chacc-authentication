@@ -2,7 +2,7 @@
   "name": "chacc_authentication",
   "display_name": "Authentication Module",
   "version": "0.1.0",
-  "author": "Jonas G Mwambimbi",
+  "author": "ChaCC API Team",
   "description": "A ChaCC module providing authentication functionality.",
   "entry_point": "module.main:setup_plugin",
   "test_entry_point": "module.tests.test_module:run_module_tests",
