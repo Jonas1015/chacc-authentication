@@ -1,7 +1,7 @@
 from .services import create_default_user
 from chacc_api import BackboneContext
 from typing import Optional
-from .auth import get_current_user
+from .auth import get_current_user, get_password_hash
 from .routes import router as auth_router, registerRouter
 from .routes_rbac import router as rbac_router
 from .context_factory import get_context, set_module_context
@@ -88,6 +88,7 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
 
     _module_context.register_service("get_current_user", get_current_user)
     _module_context.register_service("UserModel", User)
+    _module_context.register_service("get_password_hash", get_password_hash)
 
     await initialize_rbac_defaults(_module_context)
 
