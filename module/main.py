@@ -1,12 +1,19 @@
-from .services import create_default_user
+from chacc_authentication.module.services import (
+    create_default_user,
+    ensure_default_admin_privileges,
+)
 from chacc_api import BackboneContext
 from typing import Optional
-from .auth import get_current_user, get_password_hash
-from .routes import router as auth_router, registerRouter
-from .routes_rbac import router as rbac_router
-from .context_factory import get_context, set_module_context
-from .models import DEFAULT_PRIVILEGES, DEFAULT_ROLES, User
-from .services.rbac_service import get_rbac_service
+from chacc_authentication.module.auth import get_current_user, get_password_hash
+from chacc_authentication.module.routes import router as auth_router, registerRouter
+from chacc_authentication.module.routes_rbac import router as rbac_router
+from chacc_authentication.module.context_factory import get_context, set_module_context
+from chacc_authentication.module.models import DEFAULT_PRIVILEGES, DEFAULT_ROLES, User
+from chacc_authentication.module.services.rbac_service import get_rbac_service
+from chacc_authentication.module.services.privilege_provider import (
+    PrivilegeService,
+    has_privileges,
+)
 
 
 async def initialize_rbac_defaults(module_context: BackboneContext):
@@ -90,10 +97,20 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
     _module_context.register_service("UserModel", User)
     _module_context.register_service("get_password_hash", get_password_hash)
 
+    # Cross-module RBAC: let other plugins manage and enforce privileges without
+    # importing anything from authentication (mirrors get_current_user above).
+    _module_context.register_service(
+        "privilege_service", PrivilegeService(_module_context)
+    )
+    _module_context.register_service("has_privileges", has_privileges)
+
     await initialize_rbac_defaults(_module_context)
 
     # Create default user after migration has run and tables are created
     await create_default_user(_module_context)
+
+    # Guarantee the default admin can bootstrap RBAC (idempotent).
+    await ensure_default_admin_privileges(_module_context)
 
     if (
         _module_context.get_module_config(
@@ -102,7 +119,7 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
         == "true"
     ):
         _module_context.logger.info(
-            "authentication: Self-registration is enabled."
+            "ChaCC-Authentication: Self-registration is enabled."
         )
         auth_router.include_router(registerRouter)
 
