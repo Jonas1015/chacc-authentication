@@ -146,7 +146,9 @@ def test_user_model_with_persistence(db_session):
 
 def test_user_create_model():
     """Test UserCreate Pydantic model."""
-    user_data = UserCreate(username="test", email="test@example.com", password="pass")
+    user_data = UserCreate(
+        username="test", email="test@example.com", password="pass", passwordConfirm="pass"
+    )
     assert user_data.username == "test"
     assert user_data.email == "test@example.com"
     assert user_data.password == "pass"
@@ -154,7 +156,7 @@ def test_user_create_model():
 
 def test_authentication_module_info():
     """Test module information retrieval."""
-    from main import get_plugin_info
+    from module.main import get_plugin_info
 
     info = get_plugin_info()
     assert info["name"] == "authentication"
