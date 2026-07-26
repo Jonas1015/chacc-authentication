@@ -6,12 +6,6 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from unittest.mock import Mock
-import sys
-import os
-
-module_dir = os.path.dirname(os.path.dirname(__file__))
-if module_dir not in sys.path:
-    sys.path.insert(0, module_dir)
 
 from ..auth import (
     get_password_hash,
@@ -156,7 +150,7 @@ def test_user_create_model():
 
 def test_authentication_module_info():
     """Test module information retrieval."""
-    from module.main import get_plugin_info
+    from chacc_authentication.module.main import get_plugin_info
 
     info = get_plugin_info()
     assert info["name"] == "authentication"
