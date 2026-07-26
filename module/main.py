@@ -104,6 +104,13 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
     )
     _module_context.register_service("has_privileges", has_privileges)
 
+    # Cross-module RBAC: let other plugins manage and enforce privileges without
+    # importing anything from authentication (mirrors get_current_user above).
+    _module_context.register_service(
+        "privilege_service", PrivilegeService(_module_context)
+    )
+    _module_context.register_service("has_privileges", has_privileges)
+
     await initialize_rbac_defaults(_module_context)
 
     # Create default user after migration has run and tables are created

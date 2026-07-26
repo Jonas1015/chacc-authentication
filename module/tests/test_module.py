@@ -7,14 +7,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from unittest.mock import Mock
 
-from ..auth import (
+from chacc_authentication.module.auth import (
     get_password_hash,
     verify_password,
     authenticate_user,
     create_access_token,
 )
-from ..models import User, UserCreate
-from ..context_factory import set_module_context
+from chacc_authentication.module.models import User, UserCreate
+from chacc_authentication.module.context_factory import set_module_context
 
 
 class MockBackboneContext:

@@ -13,18 +13,18 @@ Flow:
 """
 
 import json
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
-from src.logger import configure_logging
 
-from ..models.session import OAuthSession
-from ..models.user import User
-from ..auth import create_access_token
+from chacc_authentication.module.models.session import OAuthSession
+from chacc_authentication.module.models.user import User
+from chacc_authentication.module.auth import create_access_token
 
-logger = configure_logging()
+logger = logging.getLogger(__name__)
 
 
 class OAuth2Service:

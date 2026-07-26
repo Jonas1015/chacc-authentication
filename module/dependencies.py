@@ -14,10 +14,10 @@ from typing import List
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from .auth import get_current_user
-from .context_factory import get_db, get_module_context, get_redis_client
-from .models import User
-from .services import get_rbac_service
+from chacc_authentication.module.auth import get_current_user
+from chacc_authentication.module.context_factory import get_db, get_module_context, get_redis_client
+from chacc_authentication.module.models import User
+from chacc_authentication.module.services import get_rbac_service
 
 
 def require_privilege(privilege_name: str):
