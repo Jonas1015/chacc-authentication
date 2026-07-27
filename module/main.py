@@ -4,7 +4,7 @@ from chacc_authentication.module.services import (
 )
 from chacc_api import BackboneContext
 from typing import Optional
-from chacc_authentication.module.auth import get_current_user
+from chacc_authentication.module.auth import get_current_user, get_password_hash
 from chacc_authentication.module.routes import router as auth_router, registerRouter
 from chacc_authentication.module.routes_rbac import router as rbac_router
 from chacc_authentication.module.context_factory import get_context, set_module_context
@@ -95,6 +95,14 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
 
     _module_context.register_service("get_current_user", get_current_user)
     _module_context.register_service("UserModel", User)
+    _module_context.register_service("get_password_hash", get_password_hash)
+
+    # Cross-module RBAC: let other plugins manage and enforce privileges without
+    # importing anything from authentication (mirrors get_current_user above).
+    _module_context.register_service(
+        "privilege_service", PrivilegeService(_module_context)
+    )
+    _module_context.register_service("has_privileges", has_privileges)
 
     # Cross-module RBAC: let other plugins manage and enforce privileges without
     # importing anything from authentication (mirrors get_current_user above).

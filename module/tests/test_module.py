@@ -6,12 +6,6 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from unittest.mock import Mock
-import sys
-import os
-
-module_dir = os.path.dirname(os.path.dirname(__file__))
-if module_dir not in sys.path:
-    sys.path.insert(0, module_dir)
 
 from chacc_authentication.module.auth import (
     get_password_hash,
@@ -146,7 +140,9 @@ def test_user_model_with_persistence(db_session):
 
 def test_user_create_model():
     """Test UserCreate Pydantic model."""
-    user_data = UserCreate(username="test", email="test@example.com", password="pass")
+    user_data = UserCreate(
+        username="test", email="test@example.com", password="pass", passwordConfirm="pass"
+    )
     assert user_data.username == "test"
     assert user_data.email == "test@example.com"
     assert user_data.password == "pass"
