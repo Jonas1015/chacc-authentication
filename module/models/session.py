@@ -43,5 +43,5 @@ class OAuthSession(ChaCCBaseModel):
     device_info = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
 
-    user = relationship(User, back_populates="oauth_sessions")
+    user = relationship(User, back_populates="oauth_sessions", lazy="raise")
 

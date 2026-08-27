@@ -16,9 +16,10 @@ from chacc_api import BackboneContext
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from chacc_authentication.module.auth import get_current_user, get_current_user_required
-from chacc_authentication.module.context_factory import get_db, get_module_context
+from chacc_authentication.module.context_factory import get_db, get_async_db, get_module_context
 from chacc_authentication.module.models import User, Privilege, Role, RoleGroup
 from chacc_authentication.module.services import get_rbac_service
 from chacc_authentication.module.dependencies import get_redis_client
@@ -132,7 +133,7 @@ async def get_privileges(
     size: int = Query(20, ge=1, le=200),
     search: str = Query(""),
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List privileges (server-side pagination + search)."""
     stmt = select(Privilege)
@@ -145,16 +146,14 @@ async def get_privileges(
                 Privilege.severity.ilike(like),
             )
         )
-    total = db.execute(
+    count_result = await db.execute(
         select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
-    rows = (
-        db.execute(
-            stmt.order_by(Privilege.name).offset((page - 1) * size).limit(size)
-        )
-        .scalars()
-        .all()
     )
+    total = count_result.scalar_one()
+    result = await db.execute(
+        stmt.order_by(Privilege.name).offset((page - 1) * size).limit(size)
+    )
+    rows = result.scalars().all()
     return PaginatedPrivileges(data=rows, **_page_meta(total, page, size))
 
 
@@ -162,7 +161,7 @@ async def get_privileges(
 async def create_privilege(
     privilege: PrivilegeCreate,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new privilege."""
     redis_client = await get_redis_client()
@@ -196,7 +195,7 @@ async def update_privilege(
     privilege_name: str,
     privilege: PrivilegeUpdate,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update a privilege's description and/or severity."""
     redis_client = await get_redis_client()
@@ -222,7 +221,7 @@ async def update_privilege(
 async def delete_privilege(
     privilege_name: str,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Delete a privilege by name."""
     redis_client = await get_redis_client()
@@ -249,7 +248,7 @@ async def get_roles(
     size: int = Query(20, ge=1, le=200),
     search: str = Query(""),
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List roles with privileges (server-side pagination + search)."""
     stmt = select(Role)
@@ -258,14 +257,12 @@ async def get_roles(
         stmt = stmt.where(
             or_(Role.name.ilike(like), Role.description.ilike(like))
         )
-    total = db.execute(
+    count_result = await db.execute(
         select(func.count()).select_from(stmt.subquery())
-    ).scalar_one()
-    rows = (
-        db.execute(stmt.order_by(Role.name).offset((page - 1) * size).limit(size))
-        .scalars()
-        .all()
     )
+    total = count_result.scalar_one()
+    result = await db.execute(stmt.order_by(Role.name).offset((page - 1) * size).limit(size))
+    rows = result.scalars().all()
     return PaginatedRoles(data=rows, **_page_meta(total, page, size))
 
 
@@ -273,7 +270,7 @@ async def get_roles(
 async def get_role(
     role_name: str,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get a specific role with its privileges."""
     redis_client = await get_redis_client()
@@ -290,7 +287,7 @@ async def get_role(
 async def create_role(
     role: RoleCreate,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new role."""
     redis_client = await get_redis_client()
@@ -320,7 +317,7 @@ async def update_role(
     role_name: str,
     role: RoleUpdate,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update a role's name, description and/or assigned privileges."""
     redis_client = await get_redis_client()
@@ -350,7 +347,7 @@ async def update_role(
 async def delete_role(
     role_name: str,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Delete a non-system role."""
     redis_client = await get_redis_client()
@@ -376,7 +373,7 @@ async def assign_privilege_to_role(
     role_name: str,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Assign a privilege to a role."""
     redis_client = await get_redis_client()
@@ -403,7 +400,7 @@ async def remove_privilege_from_role(
     role_name: str,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Remove a privilege from a role."""
     redis_client = await get_redis_client()
@@ -428,9 +425,10 @@ async def remove_privilege_from_role(
 # ==================== User Privilege Endpoints ====================
 
 
-def _resolve_user(user_uuid: str, db: Session) -> User:
+async def _resolve_user(user_uuid: str, db: AsyncSession) -> User:
     """Resolve a user by uuid (ids are never exposed to the API)."""
-    user = db.query(User).filter(User.uuid == user_uuid).first()
+    result = await db.execute(select(User).filter(User.uuid == user_uuid))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
@@ -439,7 +437,7 @@ def _resolve_user(user_uuid: str, db: Session) -> User:
 @router.get("/me/privileges", response_model=UserPrivilegesResponse)
 async def get_my_privileges(
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get effective privileges for the current user."""
     redis_client = await get_redis_client()
@@ -456,7 +454,7 @@ async def get_my_privileges(
 async def get_user_privileges(
     user_uuid: str,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get effective privileges for a user."""
     redis_client = await get_redis_client()
@@ -480,7 +478,7 @@ async def get_user_privileges(
 async def get_user_roles(
     user_uuid: str,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get the roles directly assigned to a user."""
     redis_client = await get_redis_client()
@@ -504,7 +502,7 @@ async def get_user_roles(
 async def get_user_direct_privileges(
     user_uuid: str,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get privileges assigned directly to a user (excluding role-inherited)."""
     redis_client = await get_redis_client()
@@ -527,7 +525,7 @@ async def assign_role_to_user(
     user_uuid: str,
     request: AssignRoleRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Assign a role to a user."""
     redis_client = await get_redis_client()
@@ -552,7 +550,7 @@ async def remove_role_from_user(
     user_uuid: str,
     request: AssignRoleRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Remove a role from a user."""
     redis_client = await get_redis_client()
@@ -577,7 +575,7 @@ async def assign_direct_privilege_to_user(
     user_uuid: str,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Assign a direct privilege to a user."""
     redis_client = await get_redis_client()
@@ -606,7 +604,7 @@ async def remove_direct_privilege_from_user(
     user_uuid: str,
     request: AssignPrivilegeRequest,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Remove a direct privilege from a user."""
     redis_client = await get_redis_client()
@@ -636,8 +634,9 @@ async def remove_direct_privilege_from_user(
 @router.get("/role-groups", response_model=list)
 async def get_role_groups(
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get all role groups."""
-    role_groups = db.query(RoleGroup).all()
+    result = await db.execute(select(RoleGroup))
+    role_groups = result.scalars().all()
     return role_groups

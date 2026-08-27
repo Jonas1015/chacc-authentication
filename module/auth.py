@@ -3,6 +3,8 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from argon2 import PasswordHasher
@@ -57,8 +59,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-def authenticate_user(db: Session, username: str, password: str):
-    user: User = db.query(User).filter(User.username == username).first()
+async def authenticate_user(db: AsyncSession, username: str, password: str):
+    result = await db.execute(select(User).filter(User.username == username))
+    user: User = result.scalar_one_or_none()
     if not user:
         return False
     if not verify_password(password, user.password_hash):
@@ -84,7 +87,8 @@ async def get_current_user(
     if not credentials:
         return None
 
-    db = await anext(context.get_db())
+    db_gen = context.get_db_async()
+    db = await anext(db_gen)
 
     try:
         payload = jwt.decode(
@@ -95,7 +99,10 @@ async def get_current_user(
             return None
     except JWTError:
         return None
-    user = db.query(User).filter(User.username == username).first()
+
+    from sqlalchemy import select
+    result = await db.execute(select(User).filter(User.username == username))
+    user = result.scalar_one_or_none()
     if user is None:
         return None
     return user

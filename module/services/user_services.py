@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import Request
 from chacc_api import BackboneContext, RedisService
@@ -26,31 +27,36 @@ async def create_default_user(context):
         "DEFAULT_ADMIN_PASSWORD", "authentication", "admin123"
     )
 
-    db: Session = await anext(_module_context.get_db())
+    db_gen = _module_context.get_db_async()
+    db = await anext(db_gen)
+    try:
+        from sqlalchemy import select, func
+        result = await db.execute(select(func.count()).select_from(User))
+        user_count = result.scalar() or 0
+        if user_count > 0:
+            _module_context.logger.info(
+                f"Users already exist ({user_count}), skipping default user creation"
+            )
+            return
 
-    user_count = db.query(User).count()
-    if user_count > 0:
-        _module_context.logger.info(
-            f"Users already exist ({user_count}), skipping default user creation"
+        hashed_password = get_password_hash(default_password)
+        default_user = User(
+            username=default_username,
+            email=f"{default_username}@chacc.local",
+            password_hash=hashed_password,
+            is_active=True,
         )
-        return
 
-    hashed_password = get_password_hash(default_password)
-    default_user = User(
-        username=default_username,
-        email=f"{default_username}@chacc.local",
-        password_hash=hashed_password,
-        is_active=True,
-    )
+        db.add(default_user)
+        await db.commit()
+        await db.refresh(default_user)
 
-    db.add(default_user)
-    db.commit()
-    db.refresh(default_user)
-
-    _module_context.logger.info(f"Created default admin user: {default_username}")
-    _module_context.logger.warning(
-        "DEFAULT CREDENTIALS - Please change the default password in production!"
-    )
+        _module_context.logger.info(f"Created default admin user: {default_username}")
+        _module_context.logger.warning(
+            "DEFAULT CREDENTIALS - Please change the default password in production!"
+        )
+    finally:
+        await db_gen.aclose()
 
 
 async def ensure_default_admin_privileges(context):
@@ -67,17 +73,23 @@ async def ensure_default_admin_privileges(context):
         "DEFAULT_ADMIN_USERNAME", "authentication", "admin"
     )
 
-    db: Session = await anext(_module_context.get_db())
-    admin = db.query(User).filter(User.username == default_username).first()
-    if not admin:
-        return
+    db_gen = _module_context.get_db_async()
+    db = await anext(db_gen)
+    try:
+        from sqlalchemy import select
+        result = await db.execute(select(User).filter(User.username == default_username))
+        admin = result.scalar_one_or_none()
+        if not admin:
+            return
 
-    rbac = get_rbac_service(db)
-    if not await rbac.has_privilege(admin.id, "ALL"):
-        await rbac.assign_direct_privilege_to_user(admin.id, "ALL")
-        _module_context.logger.info(
-            f"Granted ALL privilege to default admin '{default_username}'"
-        )
+        rbac = get_rbac_service(db)
+        if not await rbac.has_privilege(admin.id, "ALL"):
+            await rbac.assign_direct_privilege_to_user(admin.id, "ALL")
+            _module_context.logger.info(
+                f"Granted ALL privilege to default admin '{default_username}'"
+            )
+    finally:
+        await db_gen.aclose()
 
 
 async def get_token_expiry_settings(context):

@@ -25,7 +25,7 @@ async def initialize_rbac_defaults(module_context: BackboneContext):
     """
     try:
 
-        db_gen = module_context.get_db()
+        db_gen = module_context.get_db_async()
         db = await db_gen.__anext__()
 
         redis_service = module_context.get_service("redis")
@@ -38,49 +38,33 @@ async def initialize_rbac_defaults(module_context: BackboneContext):
 
         rbac = get_rbac_service(db, redis_client)
 
+        existing_priv_names = set(await rbac.get_privilege_names())
+        existing_role_names = set(await rbac.get_role_names())
+        
         for priv_data in DEFAULT_PRIVILEGES:
-            try:
-                existing = await rbac.get_privilege_by_name(priv_data["name"])
-                if not existing:
-                    await rbac.create_privilege(
-                        name=priv_data["name"],
-                        description=priv_data["description"],
-                        severity=priv_data["severity"],
-                    )
-                    module_context.logger.info(
-                        f"Created default privilege: {priv_data['name']}"
-                    )
-            except Exception as e:
-                module_context.logger.warning(
-                    f"Could not create privilege {priv_data['name']}: {e}"
-                )
-
+            if priv_data["name"] not in existing_priv_names:
+                try:
+                    await rbac.create_privilege(**priv_data)
+                    module_context.logger.info(f"Created privilege: {priv_data['name']}")
+                except Exception as e:
+                    module_context.logger.warning(f"Could not create privilege {priv_data['name']}: {e}")
+        
         for role_data in DEFAULT_ROLES:
-            try:
-                existing_role = await rbac.get_role_by_name(role_data["name"])
-                if not existing_role:
-                    new_role = await rbac.create_role(
-                        name=role_data["name"],
-                        description=role_data["description"],
-                        is_system=True,
-                    )
-
-                    for priv_name in role_data.get("privilege_names", []):
-                        await rbac.assign_privilege_to_role(
-                            role_data["name"], priv_name
-                        )
-
-                    module_context.logger.info(
-                        f"Created default role: {role_data['name']}"
-                    )
-            except Exception as e:
-                module_context.logger.warning(
-                    f"Could not create role {role_data['name']}: {e}"
-                )
+            if role_data["name"] not in existing_role_names:
+                try:
+                    await rbac.create_role(**role_data)
+                    module_context.logger.info(f"Created role: {role_data['name']}")
+                except Exception as e:
+                    module_context.logger.warning(f"Could not create role {role_data['name']}: {e}")
 
         module_context.logger.info("RBAC defaults initialization completed")
     except Exception as e:
         module_context.logger.warning(f"RBAC defaults initialization skipped: {e}")
+    finally:
+        try:
+            await db_gen.aclose()
+        except Exception:
+            pass
 
 
 async def setup_plugin(context: Optional[BackboneContext] = None):
@@ -97,15 +81,11 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
     _module_context.register_service("UserModel", User)
     _module_context.register_service("get_password_hash", get_password_hash)
 
-    # Cross-module RBAC: let other plugins manage and enforce privileges without
-    # importing anything from authentication (mirrors get_current_user above).
     _module_context.register_service(
         "privilege_service", PrivilegeService(_module_context)
     )
     _module_context.register_service("has_privileges", has_privileges)
 
-    # Cross-module RBAC: let other plugins manage and enforce privileges without
-    # importing anything from authentication (mirrors get_current_user above).
     _module_context.register_service(
         "privilege_service", PrivilegeService(_module_context)
     )
@@ -113,10 +93,8 @@ async def setup_plugin(context: Optional[BackboneContext] = None):
 
     await initialize_rbac_defaults(_module_context)
 
-    # Create default user after migration has run and tables are created
     await create_default_user(_module_context)
 
-    # Guarantee the default admin can bootstrap RBAC (idempotent).
     await ensure_default_admin_privileges(_module_context)
 
     if (

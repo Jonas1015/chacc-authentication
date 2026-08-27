@@ -30,7 +30,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-# Association table for Role-Privilege many-to-many
 role_privilege_association = Table(
     "role_privileges",
     ChaCCBaseModel.metadata,
@@ -39,7 +38,6 @@ role_privilege_association = Table(
 )
 
 
-# Association table for User-Privilege many-to-many (direct assignments)
 user_privilege_association = Table(
     "user_privileges",
     ChaCCBaseModel.metadata,
@@ -48,7 +46,6 @@ user_privilege_association = Table(
 )
 
 
-# Association table for User-Role many-to-many
 user_role_association = Table(
     "user_roles",
     ChaCCBaseModel.metadata,
@@ -57,7 +54,6 @@ user_role_association = Table(
 )
 
 
-# Association table for RoleGroup-Role many-to-many
 role_group_role_association = Table(
     "role_group_roles",
     ChaCCBaseModel.metadata,
@@ -91,12 +87,11 @@ class Privilege(ChaCCBaseModel):
     description = Column(String, nullable=False)
     severity = Column(String, nullable=False)  # CRITICAL, VERY HIGH, HIGH, MEDIUM, LOW
 
-    # Relationships
     roles = relationship(
-        "Role", secondary=role_privilege_association, back_populates="privileges"
+        "Role", secondary=role_privilege_association, back_populates="privileges", lazy="raise"
     )
     direct_users = relationship(
-        "User", secondary=user_privilege_association, back_populates="direct_privileges"
+        "User", secondary=user_privilege_association, back_populates="direct_privileges", lazy="raise"
     )
 
 
@@ -118,13 +113,13 @@ class Role(ChaCCBaseModel):
 
     # Relationships
     privileges = relationship(
-        "Privilege", secondary=role_privilege_association, back_populates="roles"
+        "Privilege", secondary=role_privilege_association, back_populates="roles", lazy="raise"
     )
     role_groups = relationship(
-        "RoleGroup", secondary=role_group_role_association, back_populates="roles"
+        "RoleGroup", secondary=role_group_role_association, back_populates="roles", lazy="raise"
     )
     users = relationship(
-        "User", secondary=user_role_association, back_populates="roles"
+        "User", secondary=user_role_association, back_populates="roles", lazy="raise"
     )
 
 
@@ -143,11 +138,10 @@ class RoleGroup(ChaCCBaseModel):
 
     # Relationships
     roles = relationship(
-        "Role", secondary=role_group_role_association, back_populates="role_groups"
+        "Role", secondary=role_group_role_association, back_populates="role_groups", lazy="raise"
     )
 
 
-# Default system privileges - must be created on first startup
 DEFAULT_PRIVILEGES = [
     {
         "name": "ALL",

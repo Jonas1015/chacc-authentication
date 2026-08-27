@@ -18,7 +18,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from chacc_authentication.module.models.session import OAuthSession
 from chacc_authentication.module.models.user import User
@@ -34,7 +35,7 @@ class OAuth2Service:
     Redis is used as a fast cache layer, but the DB always has the final say.
     """
 
-    def __init__(self, db: Session, redis_client=None):
+    def __init__(self, db: AsyncSession, redis_client=None):
         self.db = db
         self.redis = redis_client
 
@@ -73,8 +74,8 @@ class OAuth2Service:
         )
 
         self.db.add(oauth_session)
-        self.db.commit()
-        self.db.refresh(oauth_session)
+        await self.db.commit()
+        await self.db.refresh(oauth_session)
 
         redis_client = self._get_redis_client()
         if redis_client:
@@ -121,11 +122,10 @@ class OAuth2Service:
                     cache_data = json.loads(cached)
                     if cache_data.get("is_rotated", False):
                         return None
-                    session = (
-                        self.db.query(OAuthSession)
-                        .filter(OAuthSession.refresh_token_id == refresh_token_id)
-                        .first()
+                    result = await self.db.execute(
+                        select(OAuthSession).filter(OAuthSession.refresh_token_id == refresh_token_id)
                     )
+                    session = result.scalar_one_or_none()
                     if session and session.expires_at > datetime.now(timezone.utc):
                         return session
             except Exception as e:
@@ -133,11 +133,10 @@ class OAuth2Service:
                     f"Redis unavailable for session verification, falling back to DB: {e}"
                 )
 
-        session = (
-            self.db.query(OAuthSession)
-            .filter(OAuthSession.refresh_token_id == refresh_token_id)
-            .first()
+        result = await self.db.execute(
+            select(OAuthSession).filter(OAuthSession.refresh_token_id == refresh_token_id)
         )
+        session = result.scalar_one_or_none()
 
         if not session:
             return None
@@ -168,20 +167,22 @@ class OAuth2Service:
 
         old_token_id = old_refresh_token.replace("refresh_", "")
 
-        old_session = (
-            self.db.query(OAuthSession)
-            .filter(OAuthSession.refresh_token_id == old_token_id)
-            .first()
+        result = await self.db.execute(
+            select(OAuthSession).filter(OAuthSession.refresh_token_id == old_token_id)
         )
+        old_session = result.scalar_one_or_none()
 
         if not old_session or old_session.is_rotated:
             return None
 
         old_session.is_rotated = True
-        self.db.commit()
+        await self.db.commit()
         logger.info(f"Rotated session in database: {old_token_id}")
 
-        user = self.db.query(User).filter(User.id == old_session.user_id).first()
+        result = await self.db.execute(
+            select(User).filter(User.id == old_session.user_id)
+        )
+        user = result.scalar_one_or_none()
         if not user:
             return None
 
@@ -214,15 +215,14 @@ class OAuth2Service:
 
         refresh_token_id = refresh_token.replace("refresh_", "")
 
-        session = (
-            self.db.query(OAuthSession)
-            .filter(OAuthSession.refresh_token_id == refresh_token_id)
-            .first()
+        result = await self.db.execute(
+            select(OAuthSession).filter(OAuthSession.refresh_token_id == refresh_token_id)
         )
+        session = result.scalar_one_or_none()
 
         if session:
             session.is_rotated = True
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Revoked session in database: {refresh_token_id}")
 
             redis_client = self._get_redis_client()
@@ -245,11 +245,12 @@ class OAuth2Service:
         Returns:
             Number of sessions revoked
         """
-        sessions = (
-            self.db.query(OAuthSession)
-            .filter(OAuthSession.user_id == user_id, OAuthSession.is_rotated == False)
-            .all()
+        result = await self.db.execute(
+            select(OAuthSession).filter(
+                OAuthSession.user_id == user_id, OAuthSession.is_rotated == False
+            )
         )
+        sessions = result.scalars().all()
 
         count = 0
         redis_client = self._get_redis_client()
@@ -267,12 +268,12 @@ class OAuth2Service:
                     logger.warning(f"Redis unavailable for session cleanup: {e}")
 
         if count > 0:
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Revoked {count} sessions in database for user {user_id}")
 
         return count
 
 
-def get_oauth2_service(db: Session, redis_client=None) -> OAuth2Service:
+def get_oauth2_service(db: AsyncSession, redis_client=None) -> OAuth2Service:
     """Create an OAuth2Service instance."""
     return OAuth2Service(db, redis_client)

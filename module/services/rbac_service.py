@@ -18,10 +18,11 @@ import json
 import logging
 from typing import Optional, List
 
-from sqlalchemy import select, and_, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from chacc_authentication.module.models.rbac import Privilege, Role, RoleGroup, DEFAULT_PRIVILEGES, DEFAULT_ROLES
+from chacc_authentication.module.models.rbac import Privilege, Role
 from chacc_authentication.module.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ class RBACService:
     but the DB always has the final say.
     """
 
-    def __init__(self, db: Session, redis_client=None):
+    def __init__(self, db: AsyncSession, redis_client=None):
         self.db = db
         self.redis = redis_client
 
@@ -46,15 +47,17 @@ class RBACService:
         """Get Redis client if available."""
         return self.redis
 
-    # ==================== Privilege Operations ====================
-
     async def get_privilege_by_name(self, name: str) -> Optional[Privilege]:
         """Get a privilege by name."""
-        return self.db.query(Privilege).filter(Privilege.name == name).first()
+        result = await self.db.execute(
+            select(Privilege).filter(Privilege.name == name)
+        )
+        return result.scalar_one_or_none()
 
     async def get_all_privileges(self) -> List[Privilege]:
         """Get all privileges."""
-        return self.db.query(Privilege).all()
+        result = await self.db.execute(select(Privilege))
+        return result.scalars().all()
 
     async def create_privilege(
         self, name: str, description: str, severity: str
@@ -62,8 +65,8 @@ class RBACService:
         """Create a new privilege."""
         privilege = Privilege(name=name, description=description, severity=severity)
         self.db.add(privilege)
-        self.db.commit()
-        self.db.refresh(privilege)
+        await self.db.commit()
+        await self.db.refresh(privilege)
         logger.info(f"Created privilege: {name}")
         return privilege
 
@@ -81,8 +84,8 @@ class RBACService:
             privilege.description = description
         if severity is not None:
             privilege.severity = severity
-        self.db.commit()
-        self.db.refresh(privilege)
+        await self.db.commit()
+        await self.db.refresh(privilege)
         logger.info(f"Updated privilege: {name}")
         return privilege
 
@@ -91,22 +94,29 @@ class RBACService:
         privilege = await self.get_privilege_by_name(name)
         if privilege is None:
             return False
-        self.db.delete(privilege)
-        self.db.commit()
+        await self.db.delete(privilege)
+        await self.db.commit()
         # Effective privileges may have changed for many users.
         await self._invalidate_all_user_cache()
         logger.info(f"Deleted privilege: {name}")
         return True
 
-    # ==================== Role Operations ====================
 
     async def get_role_by_name(self, name: str) -> Optional[Role]:
         """Get a role by name."""
-        return self.db.query(Role).filter(Role.name == name).first()
+        result = await self.db.execute(
+            select(Role)
+            .options(selectinload(Role.privileges))
+            .filter(Role.name == name)
+        )
+        return result.scalar_one_or_none()
 
     async def get_all_roles(self) -> List[Role]:
         """Get all roles."""
-        return self.db.query(Role).all()
+        result = await self.db.execute(
+            select(Role).options(selectinload(Role.privileges))
+        )
+        return result.scalars().all()
 
     async def create_role(
         self, name: str, description: str, is_system: bool = False
@@ -114,8 +124,8 @@ class RBACService:
         """Create a new role."""
         role = Role(name=name, description=description, is_system=is_system)
         self.db.add(role)
-        self.db.commit()
-        self.db.refresh(role)
+        await self.db.commit()
+        await self.db.refresh(role)
         logger.info(f"Created role: {name}")
         return role
 
@@ -156,8 +166,8 @@ class RBACService:
                 resolved.append(privilege)
             role.privileges = resolved
 
-        self.db.commit()
-        self.db.refresh(role)
+        await self.db.commit()
+        await self.db.refresh(role)
         await self._invalidate_all_user_cache()
         logger.info(f"Updated role: {name}")
         return role
@@ -169,8 +179,8 @@ class RBACService:
             return False
         if getattr(role, "is_system", False):
             raise ValueError("System roles cannot be deleted")
-        self.db.delete(role)
-        self.db.commit()
+        await self.db.delete(role)
+        await self.db.commit()
         await self._invalidate_all_user_cache()
         logger.info(f"Deleted role: {name}")
         return True
@@ -187,10 +197,9 @@ class RBACService:
 
         if privilege not in role.privileges:
             role.privileges.append(privilege)
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Assigned privilege {privilege_name} to role {role_name}")
 
-        # Invalidate cache for all users with this role
         await self._invalidate_all_user_cache()
 
         return True
@@ -207,16 +216,14 @@ class RBACService:
 
         if privilege in role.privileges:
             role.privileges.remove(privilege)
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Removed privilege {privilege_name} from role {role_name}")
 
-        # Invalidate cache for all users with this role
         await self._invalidate_all_user_cache()
 
         return True
 
-    # ==================== User Privilege Operations ====================
-
+    
     async def get_user_privileges(self, user_id: int) -> List[str]:
         """
         Get effective privileges for a user.
@@ -230,7 +237,6 @@ class RBACService:
         """
         cache_key = f"user_privileges:{user_id}"
 
-        # 1. Try Cache
         redis_client = self._get_redis_client()
         if redis_client:
             try:
@@ -241,11 +247,9 @@ class RBACService:
             except Exception as e:
                 logger.warning(f"Redis unavailable, falling back to DB for RBAC: {e}")
 
-        # 2. Database Fallback (Calculate from roles + direct privileges)
         privileges = await self._calculate_effective_privileges_from_db(user_id)
         priv_names = [p.name for p in privileges]
 
-        # 3. Try to Update Cache (1 hour TTL)
         if redis_client:
             try:
                 await redis_client.setex(
@@ -258,14 +262,24 @@ class RBACService:
 
     async def get_user_roles(self, user_id: int) -> List[str]:
         """Get the names of roles directly assigned to a user."""
-        user = self.db.query(User).filter(User.id == user_id).first()
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
         if not user:
             return []
         return [role.name for role in user.roles]
 
     async def get_user_direct_privileges(self, user_id: int) -> List[str]:
         """Get the names of privileges assigned directly to a user (not via roles)."""
-        user = self.db.query(User).filter(User.id == user_id).first()
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.direct_privileges))
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
         if not user:
             return []
         return [privilege.name for privilege in user.direct_privileges]
@@ -280,31 +294,33 @@ class RBACService:
         - Direct privileges assigned to the user
         - Privileges from all roles assigned to the user
         """
-        # Get user with roles and direct privileges
-        user = self.db.query(User).filter(User.id == user_id).first()
+        result = await self.db.execute(
+            select(User)
+            .options(
+                selectinload(User.roles).selectinload(Role.privileges),
+                selectinload(User.direct_privileges),
+            )
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
 
         if not user:
             return []
 
-        # Collect privilege IDs from roles
         role_privilege_ids = set()
         for role in user.roles:
             for privilege in role.privileges:
                 role_privilege_ids.add(privilege.id)
 
-        # Collect direct privilege IDs
         direct_privilege_ids = {p.id for p in user.direct_privileges}
 
-        # Combine all privilege IDs
         all_privilege_ids = role_privilege_ids.union(direct_privilege_ids)
 
-        # Fetch all privileges
         if all_privilege_ids:
-            privileges = (
-                self.db.query(Privilege)
-                .filter(Privilege.id.in_(all_privilege_ids))
-                .all()
+            result = await self.db.execute(
+                select(Privilege).filter(Privilege.id.in_(all_privilege_ids))
             )
+            privileges = result.scalars().all()
         else:
             privileges = []
 
@@ -312,7 +328,12 @@ class RBACService:
 
     async def assign_role_to_user(self, user_id: int, role_name: str) -> bool:
         """Assign a role to a user."""
-        user = self.db.query(User).filter(User.id == user_id).first()
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
         role = await self.get_role_by_name(role_name)
 
         if not user or not role:
@@ -320,7 +341,7 @@ class RBACService:
 
         if role not in user.roles:
             user.roles.append(role)
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Assigned role {role_name} to user {user_id}")
 
         # Invalidate user's privilege cache
@@ -330,7 +351,12 @@ class RBACService:
 
     async def remove_role_from_user(self, user_id: int, role_name: str) -> bool:
         """Remove a role from a user."""
-        user = self.db.query(User).filter(User.id == user_id).first()
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
         role = await self.get_role_by_name(role_name)
 
         if not user or not role:
@@ -338,7 +364,7 @@ class RBACService:
 
         if role in user.roles:
             user.roles.remove(role)
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Removed role {role_name} from user {user_id}")
 
         # Invalidate user's privilege cache
@@ -350,7 +376,12 @@ class RBACService:
         self, user_id: int, privilege_name: str
     ) -> bool:
         """Assign a direct privilege to a user."""
-        user = self.db.query(User).filter(User.id == user_id).first()
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.direct_privileges))
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
         privilege = await self.get_privilege_by_name(privilege_name)
 
         if not user or not privilege:
@@ -358,7 +389,7 @@ class RBACService:
 
         if privilege not in user.direct_privileges:
             user.direct_privileges.append(privilege)
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Assigned direct privilege {privilege_name} to user {user_id}")
 
         # Invalidate user's privilege cache
@@ -370,7 +401,12 @@ class RBACService:
         self, user_id: int, privilege_name: str
     ) -> bool:
         """Remove a direct privilege from a user."""
-        user = self.db.query(User).filter(User.id == user_id).first()
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.direct_privileges))
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
         privilege = await self.get_privilege_by_name(privilege_name)
 
         if not user or not privilege:
@@ -378,7 +414,7 @@ class RBACService:
 
         if privilege in user.direct_privileges:
             user.direct_privileges.remove(privilege)
-            self.db.commit()
+            await self.db.commit()
             logger.info(
                 f"Removed direct privilege {privilege_name} from user {user_id}"
             )
@@ -447,6 +483,6 @@ class RBACService:
         return any(p in user_privs for p in privilege_names)
 
 
-def get_rbac_service(db: Session, redis_client=None) -> RBACService:
+def get_rbac_service(db: AsyncSession, redis_client=None) -> RBACService:
     """Create an RBACService instance."""
     return RBACService(db, redis_client)

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from chacc_api import BackboneContext
 from typing import Optional
 
@@ -11,7 +12,7 @@ from chacc_authentication.module.auth import (
     authenticate_user,
     get_password_hash,
 )
-from chacc_authentication.module.context_factory import get_module_context, get_db
+from chacc_authentication.module.context_factory import get_module_context, get_db, get_async_db
 from chacc_authentication.module.services import (
     login_user,
     refresh_token,
@@ -62,14 +63,16 @@ async def _require_write_users(current_user: User, db: Session) -> None:
 @registerRouter.post("/register", response_model=UserResponse)
 async def register(
     user: UserCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: Optional[UserResponse] = Depends(get_current_user),
 ):
-    db_user = (
-        db.query(User)
-        .filter((User.username == user.username) | (User.email == user.email))
-        .first()
+    from sqlalchemy import select, or_
+    result = await db.execute(
+        select(User).where(
+            (User.username == user.username) | (User.email == user.email)
+        )
     )
+    db_user = result.scalar_one_or_none()
     if db_user:
         raise HTTPException(
             status_code=400, detail="Username or email already registered"
@@ -87,8 +90,8 @@ async def register(
         last_name=user.last_name,
     )
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    await db.commit()
+    await db.refresh(db_user)
     return UserResponse(
         uuid=str(db_user.uuid),
         username=db_user.username,
@@ -101,8 +104,8 @@ async def register(
 
 
 @router.post("/login", response_model=Token)
-async def login(user: UserLogin, request: Request, db: Session = Depends(get_db)):
-    db_user = authenticate_user(db, user.username, user.password)
+async def login(user: UserLogin, request: Request, db: AsyncSession = Depends(get_async_db)):
+    db_user = await authenticate_user(db, user.username, user.password)
     if not db_user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
@@ -127,7 +130,7 @@ async def read_users_me(current_user: User = Depends(get_current_user_required()
 async def update_user_me(
     user_update: UserCreate,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     current_user.username = user_update.username
     current_user.email = user_update.email
@@ -137,8 +140,8 @@ async def update_user_me(
         current_user.last_name = user_update.last_name
     if user_update.password:
         current_user.password_hash = get_password_hash(user_update.password)
-    db.commit()
-    db.refresh(current_user)
+    await db.commit()
+    await db.refresh(current_user)
     return UserResponse(
         uuid=str(current_user.uuid),
         username=current_user.username,
@@ -153,13 +156,12 @@ async def update_user_me(
 @router.delete("/me")
 async def delete_user_me(
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    db.query(OAuthSession).filter(OAuthSession.user_id == current_user.id).delete(
-        synchronize_session=False
-    )
+    from sqlalchemy import delete
+    await db.execute(delete(OAuthSession).where(OAuthSession.user_id == current_user.id))
     db.delete(current_user)
-    db.commit()
+    await db.commit()
     return {"message": "User deleted"}
 
 
@@ -169,7 +171,7 @@ async def read_users(
     size: int = Query(20, ge=1, le=200),
     search: str = Query(""),
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List users (server-side pagination + search)."""
     stmt = select(User)
@@ -183,12 +185,10 @@ async def read_users(
                 User.last_name.ilike(like),
             )
         )
-    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    users = (
-        db.execute(stmt.order_by(User.username).offset((page - 1) * size).limit(size))
-        .scalars()
-        .all()
-    )
+    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+    total = count_result.scalar_one()
+    result = await db.execute(stmt.order_by(User.username).offset((page - 1) * size).limit(size))
+    users = result.scalars().all()
     data = [
         UserResponse(
             uuid=str(u.uuid),
@@ -215,12 +215,14 @@ async def admin_update_user(
     user_uuid: str,
     payload: UserAdminUpdate,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update any user (admin). Requires WRITE_USERS."""
     await _require_write_users(current_user, db)
 
-    user = db.query(User).filter(User.uuid == user_uuid).first()
+    from sqlalchemy import select
+    result = await db.execute(select(User).filter(User.uuid == user_uuid))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -237,8 +239,8 @@ async def admin_update_user(
     if payload.password:
         user.password_hash = get_password_hash(payload.password)
 
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return UserResponse(
         uuid=str(user.uuid),
         username=user.username,
@@ -254,29 +256,29 @@ async def admin_update_user(
 async def admin_delete_user(
     user_uuid: str,
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Delete any user (admin). Requires WRITE_USERS."""
     await _require_write_users(current_user, db)
 
-    user = db.query(User).filter(User.uuid == user_uuid).first()
+    from sqlalchemy import select, delete
+    result = await db.execute(select(User).filter(User.uuid == user_uuid))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
 
     # Remove dependent login sessions first (FK is NOT NULL, no DB cascade).
-    db.query(OAuthSession).filter(OAuthSession.user_id == user.id).delete(
-        synchronize_session=False
-    )
+    await db.execute(delete(OAuthSession).where(OAuthSession.user_id == user.id))
     db.delete(user)
-    db.commit()
+    await db.commit()
     return {"success": True, "message": "User deleted"}
 
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token_endpoint(
-    token_request: TokenRefreshRequest, request: Request, db: Session = Depends(get_db)
+    token_request: TokenRefreshRequest, request: Request, db: AsyncSession = Depends(get_async_db)
 ):
     """Refresh access token using a valid refresh token."""
     context = get_module_context()
@@ -294,7 +296,7 @@ async def refresh_token_endpoint(
 
 @router.post("/revoke")
 async def revoke_token_endpoint(
-    revoke_request: RevokeRequest, db: Session = Depends(get_db)
+    revoke_request: RevokeRequest, db: AsyncSession = Depends(get_async_db)
 ):
     """Revoke a refresh token (logout from specific device/session)."""
     context = get_module_context()
@@ -312,7 +314,7 @@ async def revoke_token_endpoint(
 @router.post("/logout")
 async def logout(
     current_user: User = Depends(get_current_user_required()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Logout current user from all devices (revoke all sessions)."""
     context = get_module_context()

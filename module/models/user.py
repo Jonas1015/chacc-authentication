@@ -45,12 +45,12 @@ class User(ChaCCBaseModel):
 
     # RBAC Relationships - Many-to-many through association tables
     roles = relationship(
-        "Role", secondary=user_role_association, back_populates="users"
+        "Role", secondary=user_role_association, back_populates="users", lazy="raise"
     )
     direct_privileges = relationship(
-        "Privilege", secondary=user_privilege_association, back_populates="direct_users"
+        "Privilege", secondary=user_privilege_association, back_populates="direct_users", lazy="raise"
     )
     oauth_sessions = relationship(
-        "OAuthSession", back_populates="user", cascade="all, delete-orphan"
+        "OAuthSession", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
 
