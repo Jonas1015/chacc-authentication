@@ -78,14 +78,29 @@ class PrivilegeService:
         return _to_dict(await rbac.create_privilege(name, description, severity))
 
     async def ensure(
-        self, name: str, description: str, severity: str = "MEDIUM"
-    ) -> dict:
-        """Idempotent create — safe to call on every startup."""
+        self, privileges: List[tuple[str, str, str]]
+    ) -> List[dict]:
+        """Idempotent bulk create — safe to call on every startup.
+
+        Args:
+            privileges: List of (name, description, severity) tuples.
+
+        Returns:
+            List of privilege dicts for all requested privileges.
+        """
+        names = [name for name, _, _ in privileges]
         rbac = await _new_rbac(self._ctx())
-        existing = await rbac.get_privilege_by_name(name)
-        if existing:
-            return _to_dict(existing)
-        return _to_dict(await rbac.create_privilege(name, description, severity))
+        existing = await rbac.get_privileges_by_names(names)
+        existing_by_name = {p.name: p for p in existing}
+
+        results = []
+        for name, description, severity in privileges:
+            if name in existing_by_name:
+                results.append(_to_dict(existing_by_name[name]))
+            else:
+                created = await rbac.create_privilege(name, description, severity)
+                results.append(_to_dict(created))
+        return results
 
     async def update(
         self,

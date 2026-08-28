@@ -9,6 +9,7 @@ from chacc_authentication.module.models import User, Token, TokenRefreshRequest,
 from chacc_authentication.module.services.oauth2_service import OAuth2Service
 from chacc_authentication.module.context_factory import get_module_context
 from datetime import timedelta, datetime, timezone
+from sqlalchemy import select, func
 
 
 async def create_default_user(context):
@@ -30,7 +31,6 @@ async def create_default_user(context):
     db_gen = _module_context.get_db_async()
     db = await anext(db_gen)
     try:
-        from sqlalchemy import select, func
         result = await db.execute(select(func.count()).select_from(User))
         user_count = result.scalar() or 0
         if user_count > 0:

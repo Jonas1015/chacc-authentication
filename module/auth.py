@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, HashingError
+from sqlalchemy import select
 
 from chacc_authentication.module.models.user import User
 from chacc_authentication.module.context_factory import get_module_context
@@ -100,12 +101,16 @@ async def get_current_user(
     except JWTError:
         return None
 
-    from sqlalchemy import select
-    result = await db.execute(select(User).filter(User.username == username))
-    user = result.scalar_one_or_none()
-    if user is None:
+    try:
+        result = await db.execute(select(User).filter(User.username == username))
+        user = result.scalar_one_or_none()
+        if user is None:
+            return None
+        return user
+    except Exception:
         return None
-    return user
+    finally:
+        await db.close()
 
 
 def get_current_user_required():

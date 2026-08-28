@@ -47,6 +47,15 @@ class RBACService:
         """Get Redis client if available."""
         return self.redis
 
+    async def get_privileges_by_names(self, names: List[str]) -> List[Privilege]:
+        """Get multiple privileges by name in a single query."""
+        if not names:
+            return []
+        result = await self.db.execute(
+            select(Privilege).filter(Privilege.name.in_(names))
+        )
+        return result.scalars().all()
+
     async def get_privilege_by_name(self, name: str) -> Optional[Privilege]:
         """Get a privilege by name."""
         result = await self.db.execute(

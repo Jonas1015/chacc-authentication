@@ -76,7 +76,7 @@ async def get_async_db():
     context = get_module_context()
     if context is None:
         raise HTTPException(status_code=500, detail="Module not initialized")
-    return context.get_db_async()
+    return await anext(context.get_db_async())
 
 
 async def get_redis_client():
