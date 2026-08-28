@@ -196,15 +196,20 @@ async def refresh_token(
     )
 
 
-async def revoke_token(db: Session, revoke_request: RevokeRequest, context) -> bool:
+async def revoke_token(db: AsyncSession, revoke_request: RevokeRequest, context) -> bool:
     """Revoke a refresh token (logout from specific device/session)."""
     redis_service = context.get_service("redis")
     redis_client = None
     if redis_service:
         redis_client = await redis_service.get_client()
 
-    oauth_service = OAuth2Service(db, redis_client)
-    return await oauth_service.revoke_session(revoke_request.refresh_token)
+
+    try:
+
+        oauth_service = OAuth2Service(db, redis_client)
+        return await oauth_service.revoke_session(revoke_request.refresh_token)
+    finally:
+        await db.close()
 
 
 async def logout_all_sessions(db: Session, user_id: int, context) -> int:
@@ -214,5 +219,8 @@ async def logout_all_sessions(db: Session, user_id: int, context) -> int:
     if redis_service:
         redis_client = await redis_service.get_client()
 
-    oauth_service = OAuth2Service(db, redis_client)
-    return await oauth_service.revoke_all_user_sessions(user_id)
+    try:
+        oauth_service = OAuth2Service(db, redis_client)
+        return await oauth_service.revoke_all_user_sessions(user_id)
+    finally:
+        await db.close()

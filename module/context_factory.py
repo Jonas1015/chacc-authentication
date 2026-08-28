@@ -72,11 +72,21 @@ async def get_db():
 
 
 async def get_async_db():
-    """Get async database session from module context."""
+    """Get async database session from module context.
+
+    Delegates to the backbone's get_async_db which handles session lifecycle
+    (creation, rollback on exception, cleanup).
+    """
     context = get_module_context()
     if context is None:
         raise HTTPException(status_code=500, detail="Module not initialized")
-    return await anext(context.get_db_async())
+    
+    gen = context.get_db_async()
+    db = await anext(gen)
+    try:
+        yield db
+    finally:
+        await gen.aclose()
 
 
 async def get_redis_client():
